@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>谁是AI - 像素资源预览</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            color: #fff;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding: 20px;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            color: #00d9ff;
+            text-shadow: 2px 2px 0 #ff6b6b;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #8892b0;
+            font-size: 1.1em;
+        }
+
+        .styles-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 30px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .style-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 3px solid #333;
+            border-radius: 8px;
+            padding: 20px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .style-card:hover {
+            border-color: #00d9ff;
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0, 217, 255, 0.2);
+        }
+
+        .style-card.selected {
+            border-color: #00ff88;
+            box-shadow: 0 0 20px rgba(0, 255, 136, 0.4);
+        }
+
+        .style-title {
+            font-size: 1.5em;
+            color: #00d9ff;
+            margin-bottom: 10px;
+            text-shadow: 1px 1px 0 #333;
+        }
+
+        .style-desc {
+            color: #8892b0;
+            font-size: 0.9em;
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+
+        .preview-area {
+            background: rgba(0, 0, 0, 0.3);
+            border: 2px dashed #444;
+            border-radius: 8px;
+            padding: 30px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 250px;
+            margin-bottom: 15px;
+            position: relative;
+        }
+
+        .preview-area::before {
+            content: '资源';
+            position: absolute;
+            top: 5px;
+            right: 10px;
+            font-size: 0.7em;
+            color: #666;
+        }
+
+        .color-samples {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+
+        .color-sample {
+            width: 24px;
+            height: 24px;
+            border: 2px solid #333;
+            border-radius: 4px;
+        }
+
+        .features {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .feature-tag {
+            background: rgba(0, 217, 255, 0.1);
+            color: #00d9ff;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            border: 1px solid #00d9ff;
+        }
+
+        .action-bar {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 15px;
+            z-index: 100;
+        }
+
+        .action-btn {
+            padding: 15px 40px;
+            font-size: 1.1em;
+            font-family: 'Courier New', monospace;
+            border: 3px solid;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .btn-confirm {
+            background: #00ff88;
+            border-color: #00aa66;
+            color: #000;
+        }
+
+        .btn-confirm:hover {
+            background: #00cc6a;
+            box-shadow: 0 5px 20px rgba(0, 255, 136, 0.4);
+        }
+
+        .btn-cancel {
+            background: #ff6b6b;
+            border-color: #aa4444;
+            color: #fff;
+        }
+
+        .btn-cancel:hover {
+            background: #ff4444;
+            box-shadow: 0 5px 20px rgba(255, 107, 107, 0.4);
+        }
+
+        @keyframes pixelBounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-3px); }
+        }
+
+        .preview-area svg {
+            animation: pixelBounce 2s ease-in-out infinite;
+        }
+
+        .notification {
+            position: fixed;
+            top: 30px;
+            right: 30px;
+            padding: 20px 30px;
+            background: #00ff88;
+            color: #000;
+            font-size: 1.1em;
+            border-radius: 8px;
+            box-shadow: 0 5px 20px rgba(0, 255, 136, 0.3);
+            transform: translateX(200%);
+            transition: transform 0.3s ease;
+            z-index: 200;
+        }
+
+        .notification.show {
+            transform: translateX(0);
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>像素资源预览</h1>
+        <p>点击选择风格，然后确认应用到游戏</p>
+    </div>
+
+    <div class="styles-grid" id="stylesGrid"></div>
+
+    <div class="action-bar">
+        <button class="action-btn btn-cancel" onclick="window.close()">取消</button>
+        <button class="action-btn btn-confirm" onclick="confirmSelection()">确认选择</button>
+    </div>
+
+    <div class="notification" id="notification">已选择样式！</div>
+
+    <script>
+        const styles = [
+            {
+                id: 'classic',
+                title: '经典Q版',
+                desc: '圆润可爱的风格，适合轻松有趣的游戏氛围',
+                colors: ['#FFB6C1', '#87CEEB', '#98FB98', '#DDA0DD'],
+                features: ['圆滑造型', '鲜艳配色', 'Q版比例'],
+                svg: `<svg width="120" height="150" viewBox="0 0 120 150">
+                    <!-- 身体 -->
+                    <rect x="45" y="70" width="30" height="40" fill="#FFB6C1" rx="5"/>
+                    <!-- 头 -->
+                    <ellipse cx="60" cy="45" rx="28" ry="26" fill="#FFE4C4"/>
+                    <!-- 眼睛 -->
+                    <ellipse cx="50" cy="42" rx="5" ry="6" fill="#000"/>
+                    <ellipse cx="70" cy="42" rx="5" ry="6" fill="#000"/>
+                    <circle cx="52" cy="40" r="2" fill="#fff"/>
+                    <circle cx="72" cy="40" r="2" fill="#fff"/>
+                    <!-- 腮红 -->
+                    <ellipse cx="42" cy="50" rx="4" ry="3" fill="#FFB6C1" opacity="0.6"/>
+                    <ellipse cx="78" cy="50" rx="4" ry="3" fill="#FFB6C1" opacity="0.6"/>
+                    <!-- 嘴巴 -->
+                    <ellipse cx="60" cy="54" rx="4" ry="2" fill="#000"/>
+                    <!-- 手 -->
+                    <ellipse cx="38" cy="75" rx="6" ry="8" fill="#FFE4C4"/>
+                    <ellipse cx="82" cy="75" rx="6" ry="8" fill="#FFE4C4"/>
+                    <!-- 脚 -->
+                    <ellipse cx="50" cy="115" rx="8" ry="5" fill="#000"/>
+                    <ellipse cx="70" cy="115" rx="8" ry="5" fill="#000"/>
+                </svg>`
+            },
+            {
+                id: 'retro',
+                title: '复古8-bit',
+                desc: '经典的8位机风格，方方正正的像素块',
+                colors: ['#8B4513', '#228B22', '#4682B4', '#FFD700'],
+                features: ['方正像素', '复古配色', '低饱和度'],
+                svg: `<svg width="120" height="150" viewBox="0 0 120 150">
+                    <!-- 身体 -->
+                    <rect x="42" y="68" width="36" height="42" fill="#8B4513"/>
+                    <!-- 头 -->
+                    <rect x="35" y="20" width="50" height="45" fill="#DEB887"/>
+                    <!-- 头发 -->
+                    <rect x="33" y="15" width="54" height="15" fill="#4A3728"/>
+                    <!-- 眼睛 -->
+                    <rect x="45" y="38" width="10" height="12" fill="#000"/>
+                    <rect x="65" y="38" width="10" height="12" fill="#000"/>
+                    <rect x="48" y="40" width="3" height="4" fill="#fff"/>
+                    <rect x="68" y="40" width="3" height="4" fill="#fff"/>
+                    <!-- 嘴巴 -->
+                    <rect x="52" y="55" width="16" height="5" fill="#000"/>
+                    <!-- 手 -->
+                    <rect x="28" y="72" width="12" height="14" fill="#DEB887"/>
+                    <rect x="80" y="72" width="12" height="14" fill="#DEB887"/>
+                    <!-- 脚 -->
+                    <rect x="40" y="112" width="16" height="8" fill="#000"/>
+                    <rect x="64" y="112" width="16" height="8" fill="#000"/>
+                </svg>`
+            },
+            {
+                id: 'soft',
+                title: '圆滑柔和',
+                desc: '更加柔和的造型和配色，营造温馨氛围',
+                colors: ['#E0BBE4', '#957DAD', '#D291BC', '#FEC8D8'],
+                features: ['柔和曲线', '粉嫩配色', '治愈系'],
+                svg: `<svg width="120" height="150" viewBox="0 0 120 150">
+                    <!-- 身体 -->
+                    <path d="M45,72 Q60,68 75,72 L78,110 Q60,118 42,110 Z" fill="#D291BC"/>
+                    <!-- 头 -->
+                    <ellipse cx="60" cy="48" rx="32" ry="30" fill="#FEC8D8"/>
+                    <!-- 眼睛 -->
+                    <ellipse cx="48" cy="45" rx="7" ry="8" fill="#333"/>
+                    <ellipse cx="72" cy="45" rx="7" ry="8" fill="#333"/>
+                    <circle cx="50" cy="42" r="3" fill="#fff"/>
+                    <circle cx="74" cy="42" r="3" fill="#fff"/>
+                    <!-- 腮红 -->
+                    <ellipse cx="38" cy="52" rx="6" ry="4" fill="#FFB6C1" opacity="0.5"/>
+                    <ellipse cx="82" cy="52" rx="6" ry="4" fill="#FFB6C1" opacity="0.5"/>
+                    <!-- 嘴巴 -->
+                    <path d="M54,58 Q60,64 66,58" fill="none" stroke="#333" stroke-width="2" stroke-linecap="round"/>
+                    <!-- 手 -->
+                    <ellipse cx="35" cy="82" rx="8" ry="10" fill="#FEC8D8"/>
+                    <ellipse cx="85" cy="82" rx="8" ry="10" fill="#FEC8D8"/>
+                    <!-- 脚 -->
+                    <ellipse cx="48" cy="120" rx="10" ry="6" fill="#957DAD"/>
+                    <ellipse cx="72" cy="120" rx="10" ry="6" fill="#957DAD"/>
+                </svg>`
+            },
+            {
+                id: 'minimal',
+                title: '极简抽象',
+                desc: '简化到极致的造型，现代感强烈',
+                colors: ['#2C3E50', '#E74C3C', '#3498DB', '#F1C40F'],
+                features: ['几何造型', '高对比度', '现代感'],
+                svg: `<svg width="120" height="150" viewBox="0 0 120 150">
+                    <!-- 身体 -->
+                    <rect x="40" y="70" width="40" height="45" fill="#3498DB"/>
+                    <!-- 头 -->
+                    <rect x="35" y="15" width="50" height="52" fill="#2C3E50"/>
+                    <!-- 眼睛 -->
+                    <circle cx="47" cy="38" r="8" fill="#F1C40F"/>
+                    <circle cx="73" cy="38" r="8" fill="#F1C40F"/>
+                    <circle cx="47" cy="38" r="4" fill="#000"/>
+                    <circle cx="73" cy="38" r="4" fill="#000"/>
+                    <!-- 嘴巴 -->
+                    <rect x="50" y="52" width="20" height="4" fill="#E74C3C"/>
+                    <!-- 手 -->
+                    <rect x="25" y="75" width="15" height="12" fill="#2C3E50"/>
+                    <rect x="80" y="75" width="15" height="12" fill="#2C3E50"/>
+                    <!-- 脚 -->
+                    <rect x="40" y="117" width="18" height="8" fill="#E74C3C"/>
+                    <rect x="62" y="117" width="18" height="8" fill="#E74C3C"/>
+                </svg>`
+            },
+            {
+                id: 'dark',
+                title: '暗黑像素',
+                desc: '暗黑风格的像素艺术，适合紧张刺激的游戏',
+                colors: ['#1a1a1a', '#4a4a4a', '#8b0000', '#c0c0c0'],
+                features: ['暗黑配色', '锐利造型', '神秘感'],
+                svg: `<svg width="120" height="150" viewBox="0 0 120 150">
+                    <!-- 身体 -->
+                    <polygon points="45,70 75,70 80,115 40,115" fill="#2d2d2d"/>
+                    <!-- 斗篷 -->
+                    <path d="M35,70 L85,70 L90,120 Q60,130 30,120 Z" fill="#1a1a1a"/>
+                    <!-- 头 -->
+                    <rect x="40" y="20" width="40" height="45" fill="#3d3d3d"/>
+                    <!-- 眼睛 -->
+                    <rect x="46" y="35" width="12" height="14" fill="#8b0000"/>
+                    <rect x="62" y="35" width="12" height="14" fill="#8b0000"/>
+                    <circle cx="52" cy="42" r="3" fill="#ff0000"/>
+                    <circle cx="68" cy="42" r="3" fill="#ff0000"/>
+                    <!-- 嘴巴 -->
+                    <line x1="48" y1="55" x2="72" y2="55" stroke="#8b0000" stroke-width="3"/>
+                    <!-- 手 -->
+                    <rect x="30" y="72" width="10" height="15" fill="#4a4a4a"/>
+                    <rect x="80" y="72" width="10" height="15" fill="#4a4a4a"/>
+                    <!-- 脚 -->
+                    <rect x="42" y="115" width="15" height="7" fill="#4a4a4a"/>
+                    <rect x="63" y="115" width="15" height="7" fill="#4a4a4a"/>
+                </svg>`
+            },
+            {
+                id: 'animal',
+                title: '动物拟人',
+                desc: '可爱的动物造型，增加趣味性',
+                colors: ['#FFA500', '#8B4513', '#FFD700', '#FFFFFF'],
+                features: ['动物特征', '可爱造型', '鲜明色彩'],
+                svg: `<svg width="120" height="150" viewBox="0 0 120 150">
+                    <!-- 身体 -->
+                    <ellipse cx="60" cy="95" rx="25" ry="30" fill="#FFA500"/>
+                    <!-- 肚皮 -->
+                    <ellipse cx="60" cy="98" rx="15" ry="22" fill="#FFF8DC"/>
+                    <!-- 头 -->
+                    <circle cx="60" cy="40" r="32" fill="#FFA500"/>
+                    <!-- 耳朵 -->
+                    <polygon points="30,20 38,5 46,20" fill="#FFA500"/>
+                    <polygon points="74,20 82,5 90,20" fill="#FFA500"/>
+                    <polygon points="32,18 38,8 44,18" fill="#FFB6C1"/>
+                    <polygon points="76,18 82,8 88,18" fill="#FFB6C1"/>
+                    <!-- 脸部 -->
+                    <ellipse cx="60" cy="48" rx="22" ry="18" fill="#FFF8DC"/>
+                    <!-- 眼睛 -->
+                    <circle cx="48" cy="40" r="7" fill="#000"/>
+                    <circle cx="72" cy="40" r="7" fill="#000"/>
+                    <circle cx="50" cy="38" r="2.5" fill="#fff"/>
+                    <circle cx="74" cy="38" r="2.5" fill="#fff"/>
+                    <!-- 鼻子 -->
+                    <ellipse cx="60" cy="48" rx="6" ry="4" fill="#8B4513"/>
+                    <!-- 嘴巴 -->
+                    <path d="M54,54 Q60,58 66,54" fill="none" stroke="#8B4513" stroke-width="2" stroke-linecap="round"/>
+                    <!-- 胡须 -->
+                    <line x1="30" y1="48" x2="42" y2="48" stroke="#000" stroke-width="1"/>
+                    <line x1="30" y1="52" x2="42" y2="52" stroke="#000" stroke-width="1"/>
+                    <line x1="78" y1="48" x2="90" y2="48" stroke="#000" stroke-width="1"/>
+                    <line x1="78" y1="52" x2="90" y2="52" stroke="#000" stroke-width="1"/>
+                    <!-- 手 -->
+                    <ellipse cx="35" cy="90" rx="8" ry="10" fill="#FFA500"/>
+                    <ellipse cx="85" cy="90" rx="8" ry="10" fill="#FFA500"/>
+                    <!-- 脚 -->
+                    <ellipse cx="48" cy="125" rx="10" ry="6" fill="#FFA500"/>
+                    <ellipse cx="72" cy="125" rx="10" ry="6" fill="#FFA500"/>
+                </svg>`
+            }
+        ];
+
+        let selectedStyle = null;
+
+        function renderStyles() {
+            const grid = document.getElementById('stylesGrid');
+            grid.innerHTML = styles.map(style => `
+                <div class="style-card" onclick="selectStyle('${style.id}')" data-id="${style.id}">
+                    <h3 class="style-title">${style.title}</h3>
+                    <p class="style-desc">${style.desc}</p>
+                    <div class="preview-area">
+                        ${style.svg}
+                    </div>
+                    <div class="color-samples">
+                        ${style.colors.map(color => `<div class="color-sample" style="background: ${color}"></div>`).join('')}
+                    </div>
+                    <div class="features">
+                        ${style.features.map(f => `<span class="feature-tag">${f}</span>`).join('')}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function selectStyle(id) {
+            selectedStyle = id;
+            document.querySelectorAll('.style-card').forEach(card => {
+                card.classList.remove('selected');
+                if (card.dataset.id === id) {
+                    card.classList.add('selected');
+                }
+            });
+        }
+
+        function confirmSelection() {
+            if (!selectedStyle) {
+                alert('请先选择一个样式！');
+                return;
+            }
+
+            const notification = document.getElementById('notification');
+            notification.classList.add('show');
+            notification.textContent = `已选择 ${styles.find(s => s.id === selectedStyle).title}！`;
+
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 2000);
+
+            console.log('Selected style:', selectedStyle);
+        }
+
+        renderStyles();
+    </script>
+</body>
+</html>

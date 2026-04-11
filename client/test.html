@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>谁是AI - 测试入口</title>
+    <style>
+        body { 
+            font-family: 'Segoe UI', Arial, sans-serif; 
+            padding: 20px; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        h1 { color: white; text-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+        .btn { 
+            padding: 15px 30px; 
+            margin: 10px; 
+            background: white; 
+            color: #667eea;
+            border: none; 
+            border-radius: 12px; 
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            transition: all 0.3s;
+        }
+        .btn:hover { transform: translateY(-3px); box-shadow: 0 6px 20px rgba(0,0,0,0.3); }
+    </style>
+</head>
+<body>
+    <h1>🧪 测试入口</h1>
+    <p style="color: white; margin-bottom: 20px;">点击下方按钮自动打开游戏窗口</p>
+    <button class="btn" onclick="openWindow('小明')">打开：小明</button><br>
+    <button class="btn" onclick="openWindow('小红')">打开：小红</button><br>
+    <button class="btn" onclick="openWindow('小李')">打开：小李</button><br>
+    <button class="btn" onclick="openWindow('小王')">打开：小王</button><br>
+    <button class="btn" onclick="openWindow('小张')">打开：小张</button>
+    
+    <script>
+        function openWindow(name) {
+            const url = 'http://localhost:3000?room=room1&name=' + encodeURIComponent(name);
+            window.open(url, '_blank', 'width=900,height=700');
+        }
+    </script>
+</body>
+</html>

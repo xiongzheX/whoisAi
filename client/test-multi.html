@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>谁是AI - 多窗口测试</title>
+    <style>
+        body { font-family: Arial; padding: 20px; }
+        .test-btn { 
+            padding: 10px 20px; 
+            margin: 5px; 
+            background: #667eea; 
+            color: white; 
+            border: none; 
+            border-radius: 8px; 
+            cursor: pointer;
+        }
+        .test-btn:hover { background: #5568d3; }
+    </style>
+</head>
+<body>
+    <h1>打开 5 个测试窗口</h1>
+    <p>点击下方按钮自动打开 5 个新窗口</p>
+    <button class="test-btn" onclick="openWindow('room1', '小明')">打开窗口 1：小明</button><br>
+    <button class="test-btn" onclick="openWindow('room1', '小红')">打开窗口 2：小红</button><br>
+    <button class="test-btn" onclick="openWindow('room1', '小李')">打开窗口 3：小李</button><br>
+    <button class="test-btn" onclick="openWindow('room1', '小王')">打开窗口 4：小王</button><br>
+    <button class="test-btn" onclick="openWindow('room1', '小张')">打开窗口 5：小张</button>
+    
+    <script>
+        function openWindow(room, name) {
+            const url = `http://localhost:3000?room=${room}&name=${name}`;
+            window.open(url, '_blank', 'width=800,height=600');
+        }
+    </script>
+</body>
+</html>

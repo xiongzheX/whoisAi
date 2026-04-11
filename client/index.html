@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>谁是AI - 8-BIT 像素对抗</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <!-- 左上角重新开始按钮（临时功能） -->
+    <button id="restartBtn" class="restart-btn" onclick="restartGame()" title="重新开始下一把">↺ 重开</button>
+
+    <!-- 模式切换 -->
+    <div class="mode-toggle" id="modeToggle">
+        <button type="button" class="mode-toggle-btn active" data-mode="test" onclick="setGameMode('test')">测试模式</button>
+        <button type="button" class="mode-toggle-btn" data-mode="solo" onclick="setGameMode('solo')">单人调试</button>
+    </div>
+    <div id="modeStatus" class="mode-status">测试模式</div>
+
+    <!-- 左上角用户信息 -->
+    <div id="userInfo" class="user-info hidden">
+        <div class="user-avatar" id="userAvatar"></div>
+        <div class="user-details">
+            <div class="user-name" id="userName">--</div>
+            <div class="user-role" id="userRole">等待中...</div>
+        </div>
+        <div class="online-dot"></div>
+    </div>
+
+    <div class="container">
+        <!-- 登录界面 -->
+        <div id="loginScreen" class="screen">
+            <div class="login-title-group">
+                <h1>谁是AI</h1>
+                <p>快速联机推理对抗</p>
+            </div>
+            <div id="loginModeStatus" class="mode-status">测试模式</div>
+            <div class="login-bottom-group">
+                <div class="form">
+                    <input type="text" id="playerName" placeholder="输入昵称" maxlength="10" autocomplete="off">
+                    <input type="text" id="roomId" placeholder="房间号（默认 room1）" value="room1" autocomplete="off">
+                    <button id="startGameBtn">► 开始游戏</button>
+                </div>
+                <script>
+                    document.getElementById('startGameBtn').addEventListener('click', function() {
+                        console.log('开始游戏按钮已点击');
+                        if (typeof joinGame === 'function') {
+                            joinGame();
+                        } else {
+                            console.error('未找到 joinGame 函数');
+                            alert('错误：joinGame 函数未定义');
+                        }
+                    });
+                </script>
+                <!-- 侦探动画区域 -->
+                <div class="detective-area walk-animation" id="loginDetective"></div>
+            </div>
+        </div>
+
+        <!-- 等待界面 -->
+        <div id="waitingScreen" class="screen hidden">
+            <!-- 侦探动画区域 -->
+            <div class="detective-area" id="waitingDetective"></div>
+
+            <h1 id="waitingTitle">等待玩家加入</h1>
+            <div id="playerList" class="player-list"></div>
+            <p id="waitingHint">▶ 需要 6 名玩家开始</p>
+        </div>
+
+        <!-- 游戏界面 -->
+        <div id="gameScreen" class="screen hidden">
+            <div class="game-layout">
+                <div class="game-main">
+                    <div class="stage-shell">
+                        <!-- 游戏信息栏 -->
+                        <div class="game-info">
+                            <div class="phase-info">
+                                <span id="phaseText">描述阶段</span>
+                                <span id="phaseHint" class="phase-hint">先等待房间进入对局。</span>
+                            </div>
+                            <div class="question-info">
+                                <span>提问次数：<span id="remainingQuestions">3</span> 次</span>
+                            </div>
+                            <div class="timer-info" id="timerInfo">
+                                <span>⏱ <span id="timer">--:--</span></span>
+                            </div>
+                            <div class="task-info hidden" id="taskInfo">
+                                <span>🎯 <span id="taskDescription">--</span></span>
+                            </div>
+                        </div>
+
+                        <div id="roundEventBanner" class="round-event-banner hidden"></div>
+
+                        <!-- 圆形讨论房间 -->
+                        <div class="discussion-room" id="discussionRoom">
+                            <div class="room-wall"></div>
+                            <div class="room-center"></div>
+                            <canvas id="tableCanvas" width="560" height="560"></canvas>
+                            <div id="playerAvatars" class="player-avatars"></div>
+                        </div>
+                    </div>
+
+                    <!-- 描述输入区域 -->
+                    <div class="input-panel hidden" id="descriptionPanel">
+                        <h3>本轮词语：<span id="wordDisplay"></span></h3>
+                        <input type="text" id="descriptionInput" placeholder="请描述这个词...">
+                        <button onclick="submitDescription()">► 提交描述</button>
+                    </div>
+
+                    <!-- 线索搜集阶段（侦探技能） -->
+                    <div class="clue-panel hidden" id="cluePanel">
+                        <h3>🔍 线索收集阶段</h3>
+                        <p>使用侦探技能收集线索</p>
+                        <div class="detective-skills">
+                            <button onclick="useSkillObserve()" id="btnObserve">
+                                📝 观察 (<span id="observeCount">3</span>)
+                            </button>
+                            <button onclick="useSkillQuestion()" id="btnQuestion">
+                                ❓ 质问 (<span id="questionCount">3</span>)
+                            </button>
+                            <button onclick="useSkillListen()" id="btnListen">
+                                👂 偷听 (<span id="listenCount">1</span>)
+                            </button>
+                        </div>
+                        <button onclick="skipClueCollecting()" class="skip-btn">⏭ 跳过线索</button>
+                    </div>
+
+                    <!-- 紧急辩论（PK）阶段 -->
+                    <div class="debate-panel hidden" id="debatePanel">
+                        <h3>⚡ 紧急辩论（PK）</h3>
+                        <p>出现平票，进入 60 秒辩论</p>
+                        <div id="debatingPlayers"></div>
+                    </div>
+
+                    <!-- 简化行动区 -->
+                    <div class="action-buttons hidden" id="questionButtons">
+                        <button onclick="showQuestionPanel()">❓ 提问</button>
+                        <button onclick="startVoting()">🗳 投票</button>
+                    </div>
+
+                    <!-- 结算/提示区 -->
+                    <div class="vote-panel hidden" id="votePanel">
+                        <h3>本轮操作</h3>
+                        <p>先点玩家头像，再选择一个动作。</p>
+                        <button onclick="showQuestionPanel()">► 快速提问</button>
+                    </div>
+
+                    <div class="defend-panel hidden" id="defendPanel">
+                        <h3>本轮反馈</h3>
+                        <div id="defendingPlayers"></div>
+                    </div>
+
+                    <!-- 聊天/消息区域 -->
+                    <div class="chat-area">
+                        <div id="messageList" class="message-list"></div>
+                        <div class="input-area" id="inputArea">
+                            <input type="text" id="messageInput" placeholder="输入消息...">
+                            <button onclick="sendMessage()">发送</button>
+                        </div>
+                    </div>
+                </div>
+
+                <aside class="skill-sidebar">
+                    <div id="skillPanel" class="skill-panel"></div>
+                </aside>
+            </div>
+        </div>
+
+        <!-- 游戏结束界面 -->
+        <div id="finishedScreen" class="screen hidden">
+            <div class="result-decoration" id="resultEmoji">▒▒▒</div>
+            <h1 id="resultTitle">结果</h1>
+            <p id="resultMessage"></p>
+            <div id="rewardSummary" class="reward-summary"></div>
+            <div id="aiProfileSummary" class="ai-profile-summary"></div>
+            <button onclick="location.reload()">► 再来一局</button>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="js/game.js"></script>
+</body>
+</html>

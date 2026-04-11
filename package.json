@@ -1,0 +1,17 @@
+{
+  "name": "who-is-ai",
+  "version": "1.0.0",
+  "description": "谁是AI - AI伪装游戏",
+  "scripts": {
+    "server": "node server/server.js",
+    "check": "node -c server/server.js && node -c client/js/ui-rendering.js && node -c client/js/game.js && node -c test-socket.js",
+    "test:socket": "node test-socket.js",
+    "test": "npm run check && npm run test:socket"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "socket.io": "^4.6.1",
+    "socket.io-client": "^4.8.3"
+  }
+}
