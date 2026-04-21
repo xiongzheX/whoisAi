@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>谁是AI - 游戏教程</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Courier New', 'SimHei', monospace;
+            background: #1a1a2e;
+            color: #ecf0f1;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .tutorial-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: #16213e;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+        
+        .tutorial-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .tutorial-header h1 {
+            font-size: 2.5rem;
+            color: #f1c40f;
+            margin-bottom: 10px;
+        }
+        
+        .tutorial-header p {
+            color: #8a8a9a;
+            font-size: 1.1rem;
+        }
+        
+        .tutorial-section {
+            margin-bottom: 40px;
+            padding: 20px;
+            background: #0f3460;
+            border-radius: 8px;
+            border-left: 4px solid #e94560;
+        }
+        
+        .tutorial-section h2 {
+            color: #e94560;
+            margin-bottom: 15px;
+            font-size: 1.5rem;
+        }
+        
+        .tutorial-section p {
+            line-height: 1.6;
+            margin-bottom: 15px;
+        }
+        
+        .tutorial-section ul {
+            margin-left: 20px;
+            margin-bottom: 15px;
+        }
+        
+        .tutorial-section li {
+            margin-bottom: 8px;
+            line-height: 1.5;
+        }
+        
+        .role-card {
+            background: #1e1e2e;
+            border: 1px solid #34495e;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .role-card h3 {
+            margin-bottom: 10px;
+        }
+        
+        .role-card.engineer {
+            border-color: #4040ff;
+        }
+        
+        .role-card.infiltrator {
+            border-color: #ff4040;
+        }
+        
+        .role-card.signal_keeper {
+            border-color: #40c040;
+        }
+        
+        .role-card.observer {
+            border-color: #9b59b6;
+        }
+        
+        .role-card.protector {
+            border-color: #3498db;
+        }
+        
+        .role-card.disruptor {
+            border-color: #e67e22;
+        }
+        
+        .step-list {
+            counter-reset: step-counter;
+            list-style: none;
+            margin-left: 0;
+        }
+        
+        .step-list li {
+            counter-increment: step-counter;
+            position: relative;
+            padding-left: 40px;
+            margin-bottom: 20px;
+        }
+        
+        .step-list li::before {
+            content: counter(step-counter);
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 30px;
+            height: 30px;
+            background: #e94560;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: white;
+        }
+        
+        .tip-box {
+            background: rgba(46, 204, 113, 0.1);
+            border: 1px solid #2ecc71;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        
+        .tip-box h4 {
+            color: #2ecc71;
+            margin-bottom: 10px;
+        }
+        
+        .warning-box {
+            background: rgba(231, 76, 60, 0.1);
+            border: 1px solid #e74c3c;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        
+        .warning-box h4 {
+            color: #e74c3c;
+            margin-bottom: 10px;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 15px;
+            margin-top: 30px;
+            justify-content: center;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-family: inherit;
+        }
+        
+        .btn-primary {
+            background: #e94560;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #ff6b81;
+            transform: translateY(-2px);
+        }
+        
+        .btn-secondary {
+            background: #16213e;
+            color: #ecf0f1;
+            border: 2px solid #34495e;
+        }
+        
+        .btn-secondary:hover {
+            background: #1e1e2e;
+            border-color: #e94560;
+        }
+        
+        @media (max-width: 768px) {
+            .tutorial-container {
+                padding: 20px;
+            }
+            
+            .tutorial-header h1 {
+                font-size: 2rem;
+            }
+            
+            .action-buttons {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="tutorial-container">
+        <div class="tutorial-header">
+            <h1>🎮 谁是AI 游戏教程</h1>
+            <p>阿瓦隆式社交推理 + AI附身干扰</p>
+        </div>
+        
+        <!-- 游戏简介 -->
+        <div class="tutorial-section">
+            <h2>📖 游戏简介</h2>
+            <p>「谁是AI」是一款6人社交推理游戏，融合了经典阿瓦隆玩法和创新的AI附身机制。</p>
+            <p>玩家分为两个阵营：</p>
+            <ul>
+                <li><strong>🔧 工程师阵营（好人）：</strong>目标是完成3次系统维护任务</li>
+                <li><strong>🦠 渗透者阵营（坏人）：</strong>目标是破坏3次系统维护任务</li>
+            </ul>
+            <p>每轮游戏包含4个阶段：<strong>提名 → 讨论 → 投票 → 执行</strong></p>
+        </div>
+        
+        <!-- 角色介绍 -->
+        <div class="tutorial-section">
+            <h2>👥 角色介绍</h2>
+            
+            <div class="role-card engineer">
+                <h3>🔧 工程师（好人阵营）</h3>
+                <p><strong>人数：</strong>3人（6人局）</p>
+                <p><strong>能力：</strong>无特殊能力，通过推理找出渗透者</p>
+                <p><strong>策略：</strong>观察发言风格，分析投票模式，找出可疑玩家</p>
+            </div>
+            
+            <div class="role-card infiltrator">
+                <h3>🦠 渗透者（坏人阵营）</h3>
+                <p><strong>人数：</strong>1人</p>
+                <p><strong>能力：</strong>执行任务时可投"破坏"票</p>
+                <p><strong>策略：</strong>伪装成好人，投票时投"同意"，执行时投"破坏"</p>
+            </div>
+            
+            <div class="role-card signal_keeper">
+                <h3>📡 信号员（好人阵营）</h3>
+                <p><strong>人数：</strong>1人</p>
+                <p><strong>能力：</strong>每轮知道"是否有人被附身"（但不知道是谁）</p>
+                <p><strong>策略：</strong>利用信息引导讨论，但不要过早暴露身份</p>
+            </div>
+            
+            <div class="role-card observer">
+                <h3>👁️ 观察者（好人阵营）</h3>
+                <p><strong>人数：</strong>1人</p>
+                <p><strong>能力：</strong>每轮可查看1名玩家的投票历史</p>
+                <p><strong>策略：</strong>分析投票模式，找出投票不一致的玩家</p>
+            </div>
+            
+            <div class="role-card protector">
+                <h3>🛡️ 保护者（好人阵营）</h3>
+                <p><strong>人数：</strong>1人（7-8人局）</p>
+                <p><strong>能力：</strong>每轮可保护1名玩家不被AI附身</p>
+                <p><strong>策略：</strong>保护关键玩家，防止他们的消息被改写</p>
+            </div>
+            
+            <div class="role-card disruptor">
+                <h3>🎭 干扰者（坏人阵营）</h3>
+                <p><strong>人数：</strong>1人（8人局）</p>
+                <p><strong>能力：</strong>每轮可改变1名玩家的投票</p>
+                <p><strong>策略：</strong>制造混乱，帮助渗透者获胜</p>
+            </div>
+        </div>
+        
+        <!-- 游戏流程 -->
+        <div class="tutorial-section">
+            <h2>🎯 游戏流程</h2>
+            
+            <ol class="step-list">
+                <li>
+                    <strong>提名阶段（15秒）</strong>
+                    <p>队长提名一个小队执行任务。小队人数根据轮次变化：[2, 3, 4, 3, 2]</p>
+                </li>
+                
+                <li>
+                    <strong>讨论阶段（45秒）</strong>
+                    <p>所有玩家可以发言讨论。每人最多发送6条消息，每条最多50字。</p>
+                    <p><strong>注意：</strong>有50%概率某位玩家的消息会被AI改写！</p>
+                </li>
+                
+                <li>
+                    <strong>投票阶段（20秒）</strong>
+                    <p>所有玩家投票"同意"或"反对"这个小队。</p>
+                    <p>多数同意 → 小队通过，进入执行阶段</p>
+                    <p>多数反对 → 队长顺移，重新提名</p>
+                </li>
+                
+                <li>
+                    <strong>执行阶段</strong>
+                    <p>小队成员投票"成功"或"破坏"。</p>
+                    <p>只要有一票"破坏"，任务就失败！</p>
+                    <p>全票"成功"，任务才成功。</p>
+                </li>
+                
+                <li>
+                    <strong>结算阶段</strong>
+                    <p>检查胜负条件：</p>
+                    <ul>
+                        <li>好人阵营胜利：完成3次任务</li>
+                        <li>坏人阵营胜利：破坏3次任务</li>
+                    </ul>
+                </li>
+            </ol>
+        </div>
+        
+        <!-- AI附身机制 -->
+        <div class="tutorial-section">
+            <h2>🤖 AI附身机制</h2>
+            <p>每轮有<strong>50%概率</strong>随机选择1位玩家被AI"附身"。</p>
+            <p>被附身的玩家：</p>
+            <ul>
+                <li>会收到提示："⚠️ 你被AI信号干扰了！"</li>
+                <li>发送的消息会被AI改写（但你自己看到的是原消息）</li>
+                <li>其他人看到的是改写后的消息</li>
+            </ul>
+            
+            <div class="tip-box">
+                <h4>💡 如何识别被附身的玩家？</h4>
+                <p>观察发言风格异常的玩家：</p>
+                <ul>
+                    <li><strong>太礼貌：</strong>"我觉得不行" → "这个方案可能需要再考虑一下"</li>
+                    <li><strong>太完整：</strong>"别选他" → "不建议选他，因为他的投票历史不够一致"</li>
+                    <li><strong>太中立：</strong>"他肯定是坏人" → "他的行为确实有些可疑"</li>
+                    <li><strong>太正式：</strong>"笑死" → "这个确实很幽默"</li>
+                </ul>
+            </div>
+        </div>
+        
+        <!-- 投票历史 -->
+        <div class="tutorial-section">
+            <h2>📊 投票历史</h2>
+            <p>游戏会记录每轮的投票情况，包括：</p>
+            <ul>
+                <li>谁投了"同意"或"反对"</li>
+                <li>小队成员是谁</li>
+                <li>投票结果（通过/否决）</li>
+            </ul>
+            
+            <div class="tip-box">
+                <h4>💡 如何利用投票历史？</h4>
+                <ul>
+                    <li><strong>分析投票模式：</strong>谁总是同意队长的提名？</li>
+                    <li><strong>找出不一致：</strong>谁的投票与其他玩家不同？</li>
+                    <li><strong>追踪行为：</strong>谁在关键轮次投了反对票？</li>
+                </ul>
+            </div>
+        </div>
+        
+        <!-- 策略建议 -->
+        <div class="tutorial-section">
+            <h2>🎯 策略建议</h2>
+            
+            <div class="tip-box">
+                <h4>🔧 工程师（好人）策略</h4>
+                <ul>
+                    <li>观察发言风格，找出被附身的玩家</li>
+                    <li>分析投票历史，找出投票不一致的玩家</li>
+                    <li>不要过早暴露信号员/观察者身份</li>
+                    <li>在关键轮次投反对票，阻止可疑小队</li>
+                </ul>
+            </div>
+            
+            <div class="warning-box">
+                <h4>🦠 渗透者（坏人）策略</h4>
+                <ul>
+                    <li>伪装成好人，投票时投"同意"</li>
+                    <li>在关键轮次投"破坏"票</li>
+                    <li>发言时不要暴露身份</li>
+                    <li>利用AI附身制造混乱</li>
+                </ul>
+            </div>
+            
+            <div class="tip-box">
+                <h4>📡 信号员策略</h4>
+                <ul>
+                    <li>利用"是否有人被附身"的信息引导讨论</li>
+                    <li>不要过早暴露身份，否则会被针对</li>
+                    <li>在关键轮次分享信息</li>
+                    <li>观察谁的发言风格异常</li>
+                </ul>
+            </div>
+        </div>
+        
+        <!-- 常见问题 -->
+        <div class="tutorial-section">
+            <h2>❓ 常见问题</h2>
+            
+            <p><strong>Q: 为什么我只能发6条消息？</strong></p>
+            <p>A: 这是游戏设计，让每句话都重要，增加策略性。</p>
+            
+            <p><strong>Q: 如何知道谁被附身了？</strong></p>
+            <p>A: 观察发言风格异常的玩家，或者信号员会告诉你"是否有人被附身"。</p>
+            
+            <p><strong>Q: 投票历史在哪里看？</strong></p>
+            <p>A: 在游戏界面的左侧面板，"📊 投票历史"部分。</p>
+            
+            <p><strong>Q: 游戏时长是多少？</strong></p>
+            <p>A: 大约10-15分钟，5轮游戏。</p>
+        </div>
+        
+        <!-- 操作按钮 -->
+        <div class="action-buttons">
+            <button class="btn btn-secondary" onclick="window.close()">关闭教程</button>
+            <button class="btn btn-primary" onclick="window.location.href='/'">开始游戏</button>
+        </div>
+    </div>
+    
+    <script>
+        // 高亮当前页面的部分
+        document.addEventListener('DOMContentLoaded', function() {
+            // 添加平滑滚动
+            document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+                anchor.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    document.querySelector(this.getAttribute('href')).scrollIntoView({
+                        behavior: 'smooth'
+                    });
+                });
+            });
+        });
+    </script>
+</body>
+</html>

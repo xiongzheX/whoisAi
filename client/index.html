@@ -3,181 +3,537 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>谁是AI - 8-BIT 像素对抗</title>
+    <title>谁是AI v3 — 阿瓦隆式社交推理</title>
     <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/style-v3.css">
 </head>
 <body>
-    <!-- 左上角重新开始按钮（临时功能） -->
-    <button id="restartBtn" class="restart-btn" onclick="restartGame()" title="重新开始下一把">↺ 重开</button>
-
-    <!-- 模式切换 -->
-    <div class="mode-toggle" id="modeToggle">
-        <button type="button" class="mode-toggle-btn active" data-mode="test" onclick="setGameMode('test')">测试模式</button>
-        <button type="button" class="mode-toggle-btn" data-mode="solo" onclick="setGameMode('solo')">单人调试</button>
-    </div>
-    <div id="modeStatus" class="mode-status">测试模式</div>
-
-    <!-- 左上角用户信息 -->
-    <div id="userInfo" class="user-info hidden">
-        <div class="user-avatar" id="userAvatar"></div>
-        <div class="user-details">
-            <div class="user-name" id="userName">--</div>
-            <div class="user-role" id="userRole">等待中...</div>
+    <!-- 跳过链接 -->
+    <a href="#main-content" class="skip-link">跳到主要内容</a>
+    
+    <!-- 连接状态 -->
+    <div id="connectionStatus" class="connection-status connected">已连接</div>
+    
+    <!-- 断线重连提示 -->
+    <div id="disconnectOverlay" class="disconnect-overlay hidden">
+      <div class="disconnect-content">
+        <div class="disconnect-icon">📡</div>
+        <h2>连接断开</h2>
+        <p id="disconnectMessage">网络连接已断开</p>
+        <div class="reconnect-progress">
+          <div class="reconnect-bar" id="reconnectBar"></div>
         </div>
-        <div class="online-dot"></div>
+        <p id="reconnectStatus">正在尝试重连...</p>
+        <button id="reconnectBtn" class="reconnect-btn" onclick="manualReconnect()">🔄 手动重连</button>
+      </div>
+    </div>
+    
+    <!-- 加载状态 -->
+    <div id="loadingOverlay" class="loading-overlay hidden">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">加载中...</div>
+    </div>
+    
+    <!-- ═══════════════════════════════════ -->
+    <!--  登录界面                            -->
+    <!-- ═══════════════════════════════════ -->
+    <div id="loginScreen" class="screen login-screen" role="main" aria-label="登录界面">
+        <div class="login-hero">
+            <div class="glitch-container">
+                <h1 class="game-title" data-text="谁是AI">谁是AI</h1>
+            </div>
+            <p class="game-subtitle">🤖 阿瓦隆式社交推理 · AI附身干扰 🧠</p>
+            <p class="game-desc">6人局 · 找出渗透者 · 完成3次任务</p>
+            <div class="tagline">
+                <span class="tagline-item">🎯 考验你的推理能力</span>
+                <span class="tagline-item">🕵️ 揭露AI的身份</span>
+                <span class="tagline-item">🎭 演技大考验</span>
+            </div>
+        </div>
+        <div class="login-form" role="form" aria-label="登录表单">
+            <div class="input-group">
+                <label for="playerName">👤 你的昵称</label>
+                <input type="text" id="playerName" placeholder="输入昵称（2-10个字）" maxlength="10" autocomplete="off" autofocus aria-required="true">
+                <div class="input-hint">好名字让人印象深刻 ✨</div>
+            </div>
+            <div class="input-group">
+                <label for="roomId">🏠 房间号</label>
+                <input type="text" id="roomId" placeholder="默认 room1" value="room1" autocomplete="off">
+                <div class="input-hint">和朋友输入相同房间号一起玩</div>
+            </div>
+            <div class="mode-toggle" role="group" aria-label="游戏模式">
+                <button type="button" class="mode-btn active" data-mode="test" onclick="setMode('test')" aria-pressed="true" aria-describedby="testModeDesc">
+                    <span class="mode-icon">🧪</span>测试模式
+                </button>
+                <button type="button" class="mode-btn" data-mode="solo" onclick="setMode('solo')" aria-pressed="false" aria-describedby="soloModeDesc">
+                    <span class="mode-icon">🎮</span>单人调试
+                </button>
+            </div>
+            <div id="testModeDesc" class="sr-only">快速测试游戏，自动添加AI玩家</div>
+            <div id="soloModeDesc" class="sr-only">单人调试模式，自动添加AI玩家并开始游戏</div>
+            <button id="joinBtn" class="join-btn" onclick="joinGame()" aria-label="开始游戏">
+                <span class="btn-text">▶ 开始游戏</span>
+                <span class="btn-loading hidden">🔄 连接中...</span>
+            </button>
+            <button class="tutorial-btn" onclick="window.open('/tutorial.html', '_blank')" aria-label="游戏教程">
+                📖 游戏教程
+            </button>
+            <div class="quick-tips">
+                <p class="tips-title">💡 快速提示</p>
+                <ul class="tips-list">
+                    <li>好人阵营：完成3次任务获胜</li>
+                    <li>坏人阵营：破坏3次任务获胜</li>
+                    <li>每轮有AI附身干扰，信号员可检测</li>
+                </ul>
+            </div>
+        </div>
+        <div class="login-footer">
+            <p>6人 · 5轮 · 约10-15分钟 · 支持手机和电脑</p>
+            <div class="social-proof">
+                <span class="proof-item">🔥 超过1000局已开</span>
+                <span class="proof-item">⭐ 4.9分好评</span>
+            </div>
+        </div>
     </div>
 
-    <div class="container">
-        <!-- 登录界面 -->
-        <div id="loginScreen" class="screen">
-            <div class="login-title-group">
-                <h1>谁是AI</h1>
-                <p>快速联机推理对抗</p>
-            </div>
-            <div id="loginModeStatus" class="mode-status">测试模式</div>
-            <div class="login-bottom-group">
-                <div class="form">
-                    <input type="text" id="playerName" placeholder="输入昵称" maxlength="10" autocomplete="off">
-                    <input type="text" id="roomId" placeholder="房间号（默认 room1）" value="room1" autocomplete="off">
-                    <button id="startGameBtn">► 开始游戏</button>
+    <!-- ═══════════════════════════════════ -->
+    <!--  等待界面                            -->
+    <!-- ═══════════════════════════════════ -->
+    <div id="waitingScreen" class="screen hidden" role="main" aria-label="等待室">
+        <div class="waiting-wrap">
+            <div class="waiting-header">
+                <h2>🎮 等待玩家加入</h2>
+                <div class="room-id-display">
+                    <span class="room-label">房间号：</span>
+                    <span class="room-id" id="waitingRoomId">room1</span>
+                    <button class="copy-btn" onclick="copyRoomId()" title="复制房间号">📋</button>
                 </div>
-                <script>
-                    document.getElementById('startGameBtn').addEventListener('click', function() {
-                        console.log('开始游戏按钮已点击');
-                        if (typeof joinGame === 'function') {
-                            joinGame();
-                        } else {
-                            console.error('未找到 joinGame 函数');
-                            alert('错误：joinGame 函数未定义');
-                        }
-                    });
-                </script>
-                <!-- 侦探动画区域 -->
-                <div class="detective-area walk-animation" id="loginDetective"></div>
+            </div>
+            
+            <!-- 玩家占位符网格 -->
+            <div class="player-slots" role="list" aria-label="玩家列表">
+                <div class="player-slot" id="slot0" role="listitem">
+                    <div class="slot-avatar">👤</div>
+                    <div class="slot-name">等待中...</div>
+                    <div class="slot-status">准备中</div>
+                </div>
+                <div class="player-slot" id="slot1" role="listitem">
+                    <div class="slot-avatar">👤</div>
+                    <div class="slot-name">等待中...</div>
+                    <div class="slot-status">准备中</div>
+                </div>
+                <div class="player-slot" id="slot2" role="listitem">
+                    <div class="slot-avatar">👤</div>
+                    <div class="slot-name">等待中...</div>
+                    <div class="slot-status">准备中</div>
+                </div>
+                <div class="player-slot" id="slot3" role="listitem">
+                    <div class="slot-avatar">👤</div>
+                    <div class="slot-name">等待中...</div>
+                    <div class="slot-status">准备中</div>
+                </div>
+                <div class="player-slot" id="slot4" role="listitem">
+                    <div class="slot-avatar">👤</div>
+                    <div class="slot-name">等待中...</div>
+                    <div class="slot-status">准备中</div>
+                </div>
+                <div class="player-slot" id="slot5" role="listitem">
+                    <div class="slot-avatar">👤</div>
+                    <div class="slot-name">等待中...</div>
+                    <div class="slot-status">准备中</div>
+                </div>
+            </div>
+            
+            <div class="waiting-players" id="waitingPlayerList" aria-live="polite"></div>
+            
+            <div class="waiting-progress">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <p class="waiting-count" aria-live="polite"><span id="waitingCount">0</span> / 6 玩家</p>
+            </div>
+            
+            <div class="waiting-hint" id="waitingHint">
+                <div class="spinner" aria-hidden="true"></div>
+                <span id="waitingText">正在召唤你的队友...</span>
+            </div>
+            
+            <div class="waiting-tips" id="waitingTips" aria-live="polite">
+                <div class="tip-carousel">
+                    <span class="tip active">💡 好游戏值得等待 ✨</span>
+                    <span class="tip">🎯 好人阵营需要完成3次任务获胜</span>
+                    <span class="tip">🕵️ 坏人阵营需要破坏3次任务获胜</span>
+                    <span class="tip">🤖 每轮有概率出现AI附身干扰</span>
+                </div>
+            </div>
+            
+            <div class="waiting-actions">
+                <button class="btn-sm" id="copyBtn" onclick="copyRoomId()" aria-label="复制房间号">📋 复制房间号</button>
+                <button class="btn-sm" onclick="shareRoom()" aria-label="分享房间">🔗 分享房间</button>
+            </div>
+            
+            <div class="mode-display" id="modeDisplay">
+                <span class="mode-label">当前模式：</span>
+                <span class="mode-value" id="currentMode">测试模式</span>
+            </div>
+            
+            <div class="waiting-fun">
+                <div class="fun-fact">
+                    <p class="fun-title">🎮 你知道吗？</p>
+                    <p class="fun-content" id="funFact">在这个游戏中，AI玩家会模仿人类行为，让你难以分辨真假！</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════ -->
+    <!--  游戏界面                            -->
+    <!-- ═══════════════════════════════════ -->
+    <div id="gameScreen" class="screen hidden" role="main" aria-label="游戏界面">
+        <!-- 测试模式水印 -->
+        <div id="testModeWatermark" class="test-mode-watermark hidden">🧪 测试环境</div>
+        <!-- 顶部状态栏 -->
+        <div class="top-bar" role="banner" aria-label="游戏状态">
+            <div class="top-left">
+                <span id="roundInfo" class="round-badge" aria-live="polite">第 1 轮</span>
+                <span id="phaseInfo" class="phase-badge" aria-live="polite">提名阶段</span>
+            </div>
+            <div class="top-center">
+                <span id="timer" class="timer" aria-live="polite" aria-atomic="true">⏱ --</span>
+            </div>
+            <div class="top-right">
+                <span id="myRole" class="role-badge" aria-live="polite">🔧 工程师</span>
             </div>
         </div>
 
-        <!-- 等待界面 -->
-        <div id="waitingScreen" class="screen hidden">
-            <!-- 侦探动画区域 -->
-            <div class="detective-area" id="waitingDetective"></div>
-
-            <h1 id="waitingTitle">等待玩家加入</h1>
-            <div id="playerList" class="player-list"></div>
-            <p id="waitingHint">▶ 需要 6 名玩家开始</p>
-        </div>
-
-        <!-- 游戏界面 -->
-        <div id="gameScreen" class="screen hidden">
-            <div class="game-layout">
-                <div class="game-main">
-                    <div class="stage-shell">
-                        <!-- 游戏信息栏 -->
-                        <div class="game-info">
-                            <div class="phase-info">
-                                <span id="phaseText">描述阶段</span>
-                                <span id="phaseHint" class="phase-hint">先等待房间进入对局。</span>
-                            </div>
-                            <div class="question-info">
-                                <span>提问次数：<span id="remainingQuestions">3</span> 次</span>
-                            </div>
-                            <div class="timer-info" id="timerInfo">
-                                <span>⏱ <span id="timer">--:--</span></span>
-                            </div>
-                            <div class="task-info hidden" id="taskInfo">
-                                <span>🎯 <span id="taskDescription">--</span></span>
-                            </div>
-                        </div>
-
-                        <div id="roundEventBanner" class="round-event-banner hidden"></div>
-
-                        <!-- 圆形讨论房间 -->
-                        <div class="discussion-room" id="discussionRoom">
-                            <div class="room-wall"></div>
-                            <div class="room-center"></div>
-                            <canvas id="tableCanvas" width="560" height="560"></canvas>
-                            <div id="playerAvatars" class="player-avatars"></div>
-                        </div>
+        <!-- 三区布局 -->
+        <div class="game-layout">
+            <!-- 左侧：任务进度 -->
+            <div class="panel-left" role="complementary" aria-label="任务信息">
+                <div class="mission-tracker">
+                    <h3>📋 任务进度</h3>
+                    <div class="mission-dots" id="missionDots" aria-live="polite">
+                        <!-- 4 个圆点由 JS 渲染 -->
                     </div>
-
-                    <!-- 描述输入区域 -->
-                    <div class="input-panel hidden" id="descriptionPanel">
-                        <h3>本轮词语：<span id="wordDisplay"></span></h3>
-                        <input type="text" id="descriptionInput" placeholder="请描述这个词...">
-                        <button onclick="submitDescription()">► 提交描述</button>
-                    </div>
-
-                    <!-- 线索搜集阶段（侦探技能） -->
-                    <div class="clue-panel hidden" id="cluePanel">
-                        <h3>🔍 线索收集阶段</h3>
-                        <p>使用侦探技能收集线索</p>
-                        <div class="detective-skills">
-                            <button onclick="useSkillObserve()" id="btnObserve">
-                                📝 观察 (<span id="observeCount">3</span>)
-                            </button>
-                            <button onclick="useSkillQuestion()" id="btnQuestion">
-                                ❓ 质问 (<span id="questionCount">3</span>)
-                            </button>
-                            <button onclick="useSkillListen()" id="btnListen">
-                                👂 偷听 (<span id="listenCount">1</span>)
-                            </button>
-                        </div>
-                        <button onclick="skipClueCollecting()" class="skip-btn">⏭ 跳过线索</button>
-                    </div>
-
-                    <!-- 紧急辩论（PK）阶段 -->
-                    <div class="debate-panel hidden" id="debatePanel">
-                        <h3>⚡ 紧急辩论（PK）</h3>
-                        <p>出现平票，进入 60 秒辩论</p>
-                        <div id="debatingPlayers"></div>
-                    </div>
-
-                    <!-- 简化行动区 -->
-                    <div class="action-buttons hidden" id="questionButtons">
-                        <button onclick="showQuestionPanel()">❓ 提问</button>
-                        <button onclick="startVoting()">🗳 投票</button>
-                    </div>
-
-                    <!-- 结算/提示区 -->
-                    <div class="vote-panel hidden" id="votePanel">
-                        <h3>本轮操作</h3>
-                        <p>先点玩家头像，再选择一个动作。</p>
-                        <button onclick="showQuestionPanel()">► 快速提问</button>
-                    </div>
-
-                    <div class="defend-panel hidden" id="defendPanel">
-                        <h3>本轮反馈</h3>
-                        <div id="defendingPlayers"></div>
-                    </div>
-
-                    <!-- 聊天/消息区域 -->
-                    <div class="chat-area">
-                        <div id="messageList" class="message-list"></div>
-                        <div class="input-area" id="inputArea">
-                            <input type="text" id="messageInput" placeholder="输入消息...">
-                            <button onclick="sendMessage()">发送</button>
-                        </div>
+                    <div class="mission-labels">
+                        <span class="mission-stat">✅ <span id="successCount">0</span></span>
+                        <span class="mission-stat">❌ <span id="failCount">0</span></span>
                     </div>
                 </div>
 
-                <aside class="skill-sidebar">
-                    <div id="skillPanel" class="skill-panel"></div>
-                </aside>
+                <!-- 提名信息 -->
+                <div class="nomination-info" id="nominationInfo">
+                    <h3>⭐ 当前队长</h3>
+                    <p id="leaderName" class="leader-name" aria-live="polite">--</p>
+                    <h3>🎯 提名小队</h3>
+                    <div id="proposedTeam" class="team-members" aria-live="polite"></div>
+                </div>
+
+                <!-- 投票历史 -->
+                <div class="vote-history" id="voteHistory">
+                    <h3>📊 投票历史</h3>
+                    <div id="voteHistoryList" class="vote-history-list" aria-live="polite"></div>
+                </div>
+
+                <!-- 信号员提示 -->
+                <div class="signal-alert hidden" id="signalAlert" role="alert" aria-live="assertive">
+                    <span class="signal-icon">📡</span>
+                    <span id="signalText">--</span>
+                </div>
+                
+                <!-- 信号员历史 -->
+                <div class="signal-history hidden" id="signalHistory">
+                    <h3>📡 信号员历史</h3>
+                    <div id="signalHistoryList" class="signal-history-list" aria-live="polite"></div>
+                </div>
+
+                <!-- 附身警告 -->
+                <div class="possession-warning hidden" id="possessionWarning" role="alert" aria-live="assertive">
+                    ⚠️ 信号干扰中
+                </div>
+            </div>
+
+            <!-- 中间：聊天区 -->
+            <div class="panel-center" role="main" aria-label="游戏主区域">
+                <!-- 舞台区：像素小人 -->
+                <div class="stage-area" id="stageArea" aria-label="玩家舞台">
+                    <canvas id="playerStage" width="640" height="160" aria-label="玩家位置显示"></canvas>
+                </div>
+
+                <!-- 谜题区（执行阶段显示） -->
+                <div class="puzzle-area hidden" id="puzzleArea">
+                    <div class="puzzle-header">
+                        <span class="puzzle-title" id="puzzleTitle">系统诊断</span>
+                        <span class="puzzle-badge" id="puzzlePossessed" style="display:none">⚠️ 信号干扰</span>
+                    </div>
+                    <div class="puzzle-scenario" id="puzzleScenario"></div>
+                    <div class="puzzle-options" id="puzzleOptions">
+                        <button class="puzzle-opt" data-answer="A" id="puzzleOptA">A</button>
+                        <button class="puzzle-opt" data-answer="B" id="puzzleOptB">B</button>
+                        <button class="puzzle-opt" data-answer="C" id="puzzleOptC">C</button>
+                    </div>
+                </div>
+
+                <!-- 揭晓区（揭晓阶段显示） -->
+                <div class="reveal-area hidden" id="revealArea">
+                    <div class="reveal-result" id="revealResult"></div>
+                    <div class="reveal-detail" id="revealDetail"></div>
+                </div>
+
+                <!-- 旁观区（非小队成员执行阶段显示） -->
+                <div class="spectate-area hidden" id="spectateArea">
+                    <div class="spectate-hint">🔍 小队正在分析系统故障...</div>
+                    <div class="spectate-team" id="spectateTeam"></div>
+                </div>
+
+                <div class="chat-box" role="log" aria-label="聊天记录" aria-live="polite">
+                    <div class="chat-messages" id="chatMessages"></div>
+                    <div class="chat-input-bar" id="chatInputBar">
+                        <input type="text" id="chatInput" placeholder="讨论中..." maxlength="30" disabled aria-label="聊天输入">
+                        <button id="chatSendBtn" onclick="sendChat()" disabled aria-label="发送消息">发送</button>
+                        <span class="msg-counter" id="msgCounter" aria-live="polite">0/4</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右侧：玩家列表 -->
+            <div class="panel-right" role="complementary" aria-label="玩家列表">
+                <h3>👥 玩家</h3>
+                <div id="playerList" class="player-list" role="list" aria-label="玩家列表"></div>
             </div>
         </div>
 
-        <!-- 游戏结束界面 -->
-        <div id="finishedScreen" class="screen hidden">
-            <div class="result-decoration" id="resultEmoji">▒▒▒</div>
-            <h1 id="resultTitle">结果</h1>
-            <p id="resultMessage"></p>
-            <div id="rewardSummary" class="reward-summary"></div>
-            <div id="aiProfileSummary" class="ai-profile-summary"></div>
-            <button onclick="location.reload()">► 再来一局</button>
+        <!-- 底部操作栏 -->
+        <div class="action-bar" id="actionBar">
+            <!-- 提名阶段：队长选人 -->
+            <div id="proposeActions" class="action-group hidden">
+                <p class="action-hint" id="proposeHint">请选择 <span id="needCount">2</span> 名队友</p>
+                <button class="action-btn confirm" id="confirmProposeBtn" onclick="confirmPropose()" disabled>确认提名</button>
+            </div>
+
+            <!-- 投票阶段：同意/反对 -->
+            <div id="voteActions" class="action-group hidden">
+                <p class="action-hint">你同意这个小队吗？</p>
+                <button class="action-btn approve" onclick="submitTeamVote(true)">✅ 同意</button>
+                <button class="action-btn reject" onclick="submitTeamVote(false)">❌ 反对</button>
+            </div>
+
+            <!-- 任务阶段：成功/破坏 -->
+            <div id="missionActions" class="action-group hidden">
+                <p class="action-hint">执行任务</p>
+                <button class="action-btn approve" onclick="submitMissionVote(true)">✅ 成功</button>
+                <button class="action-btn reject hidden" id="sabotageBtn" onclick="submitMissionVote(false)">🦠 破坏</button>
+            </div>
+        </div>
+
+        <!-- 调试面板（单人调试模式显示） -->
+        <div id="debugPanel" class="debug-panel hidden">
+            <div class="debug-header">
+                <h3>🛠️ 调试面板</h3>
+                <button class="debug-toggle" onclick="toggleDebugPanel()">▼</button>
+            </div>
+            <div class="debug-content" id="debugContent">
+                <!-- 调试控制 -->
+                <div class="debug-section">
+                    <h4>🎮 游戏控制</h4>
+                    <div class="debug-controls">
+                        <button id="pauseBtn" class="debug-btn" onclick="togglePause()">⏸️ 暂停</button>
+                        <button class="debug-btn" onclick="skipPhase()">⏭️ 跳过阶段</button>
+                        <button class="debug-btn" onclick="jumpToPhase('vote')">🗳️ 跳到投票</button>
+                        <button class="debug-btn" onclick="jumpToPhase('mission')">🎯 跳到执行</button>
+                    </div>
+                </div>
+
+                <!-- 阶段跳转 -->
+                <div class="debug-section">
+                    <h4>🔄 阶段跳转</h4>
+                    <div class="phase-buttons">
+                        <button class="debug-btn small" onclick="jumpToPhase('propose')">提名</button>
+                        <button class="debug-btn small" onclick="jumpToPhase('discuss')">讨论</button>
+                        <button class="debug-btn small" onclick="jumpToPhase('vote')">投票</button>
+                        <button class="debug-btn small" onclick="jumpToPhase('mission')">执行</button>
+                        <button class="debug-btn small" onclick="jumpToPhase('reveal')">揭晓</button>
+                        <button class="debug-btn small" onclick="jumpToPhase('roundIntro')">轮次开始</button>
+                    </div>
+                </div>
+
+                <!-- AI 状态 -->
+                <div class="debug-section">
+                    <h4>🤖 AI 状态</h4>
+                    <div id="aiStatusList" class="ai-status-list">
+                        <!-- AI 状态将由 JS 动态生成 -->
+                    </div>
+                </div>
+
+                <!-- 游戏状态 -->
+                <div class="debug-section">
+                    <h4>📊 游戏状态</h4>
+                    <div id="gameStatusInfo" class="game-status-info">
+                        <!-- 游戏状态将由 JS 动态生成 -->
+                    </div>
+                </div>
+
+                <!-- 日志 -->
+                <div class="debug-section">
+                    <h4>📝 调试日志</h4>
+                    <div id="debugLog" class="debug-log">
+                        <!-- 日志将由 JS 动态生成 -->
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
+
+    <!-- ═══════════════════════════════════ -->
+    <!--  游戏结束界面                        -->
+    <!-- ═══════════════════════════════════ -->
+    <div id="finishedScreen" class="screen hidden">
+        <div class="finished-wrap">
+            <div class="result-header" id="resultHeader">
+                <h1 id="resultTitle">--</h1>
+                <p id="resultMessage"></p>
+            </div>
+            
+            <div class="roles-reveal">
+                <h3>🎭 角色揭示</h3>
+                <div id="rolesRevealList"></div>
+            </div>
+            
+            <div class="mission-summary">
+                <h3>📋 任务记录</h3>
+                <div id="missionSummaryDots"></div>
+            </div>
+            
+            <!-- 游戏统计 -->
+            <div class="game-stats">
+                <h3>📊 游戏统计</h3>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <span class="stat-label">游戏时长</span>
+                        <span class="stat-value" id="gameDuration">--</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">投票轮次</span>
+                        <span class="stat-value" id="voteRounds">--</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">聊天消息</span>
+                        <span class="stat-value" id="chatMessages">--</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">AI附身次数</span>
+                        <span class="stat-value" id="possessionCount">--</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 游戏回顾 -->
+            <div class="game-review">
+                <h3>📊 游戏回顾</h3>
+                <div class="review-section">
+                    <h4>投票历史</h4>
+                    <div id="reviewVoteHistory" class="review-list"></div>
+                </div>
+                <div class="review-section">
+                    <h4>信号员记录</h4>
+                    <div id="reviewSignalHistory" class="review-list"></div>
+                </div>
+                <div class="review-section">
+                    <h4>关键事件</h4>
+                    <div id="reviewKeyEvents" class="review-list"></div>
+                </div>
+            </div>
+            
+            <!-- MVP评选 -->
+            <div class="mvp-section">
+                <h3>🏆 MVP评选</h3>
+                <div class="mvp-awards">
+                    <div class="mvp-award">
+                        <span class="mvp-icon">🎯</span>
+                        <span class="mvp-title">最佳推理</span>
+                        <span class="mvp-player" id="mvpReasoning">--</span>
+                    </div>
+                    <div class="mvp-award">
+                        <span class="mvp-icon">🎭</span>
+                        <span class="mvp-title">最佳演技</span>
+                        <span class="mvp-player" id="mvpActing">--</span>
+                    </div>
+                    <div class="mvp-award">
+                        <span class="mvp-icon">💬</span>
+                        <span class="mvp-title">话痨王</span>
+                        <span class="mvp-player" id="mvpChatter">--</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="finished-actions">
+                <button onclick="location.reload()" class="action-btn approve">► 再来一局</button>
+                <button onclick="backToHome()" class="action-btn secondary">🏠 返回首页</button>
+                <button onclick="shareResult()" class="action-btn share">📤 分享战绩</button>
+            </div>
+            
+            <div class="game-feedback">
+                <p>你觉得这局游戏怎么样？</p>
+                <div class="feedback-buttons">
+                    <button class="feedback-btn" onclick="submitFeedback('great')">👍 超赞</button>
+                    <button class="feedback-btn" onclick="submitFeedback('good')">😊 还行</button>
+                    <button class="feedback-btn" onclick="submitFeedback('bad')">😕 一般</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════ -->
+    <!--  帮助面板                            -->
+    <!-- ═══════════════════════════════════ -->
+    <div id="helpPanel" class="help-panel hidden">
+        <div class="help-content">
+            <h2>❓ 帮助</h2>
+            <div class="help-section">
+                <h3>🎮 游戏目标</h3>
+                <p>好人阵营需要完成3次任务，坏人阵营需要破坏3次任务。</p>
+            </div>
+            <div class="help-section">
+                <h3>👥 角色介绍</h3>
+                <ul>
+                    <li><strong>🔧 工程师</strong>：好人阵营，投票支持任务成功</li>
+                    <li><strong>🦠 渗透者</strong>：坏人阵营，投票破坏任务</li>
+                    <li><strong>📡 信号员</strong>：好人阵营，能检测AI附身</li>
+                </ul>
+            </div>
+            <div class="help-section">
+                <h3>🔄 游戏流程</h3>
+                <ol>
+                    <li>队长提名小队成员</li>
+                    <li>全员讨论（每人最多6条消息）</li>
+                    <li>全员投票决定是否执行</li>
+                    <li>小队成员投票决定成功/破坏</li>
+                </ol>
+            </div>
+            <div class="help-section">
+                <h3>🤖 AI附身</h3>
+                <p>每轮有50%概率有人被AI附身，他们的消息会被改写。信号员能检测到附身。</p>
+            </div>
+            <button class="help-close" onclick="hideHelp()">关闭</button>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════ -->
+    <!--  教程面板                            -->
+    <!-- ═══════════════════════════════════ -->
+    <div id="tutorialPanel" class="tutorial-panel hidden">
+        <div class="tutorial-content" id="tutorialContent">
+            <!-- 教程内容将由 JavaScript 动态生成 -->
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════ -->
+    <!--  通用弹窗                            -->
+    <!-- ═══════════════════════════════════ -->
+    <div id="toast" class="toast hidden"></div>
 
     <script src="/socket.io/socket.io.js"></script>
-    <script src="js/game.js"></script>
+    <script src="js/stage.js?v=2"></script>
+    <script src="js/game.js?v=2"></script>
 </body>
 </html>

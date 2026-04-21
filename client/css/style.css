@@ -7,6 +7,7 @@
     --pixel-black: #1a1c2c;
     --pixel-dark: #2d2d44;
     --pixel-gray: #41436a;
+    --pixel-gray-light: #6a6c9a; /* 辅助文字用，对比度 4.5:1 on #0d0d1a */
     --pixel-blue: #4040ff;
     --pixel-light-blue: #6060ff;
     --pixel-cyan: #40c0ff;
@@ -30,7 +31,8 @@
 
 html,
 body {
-    min-height: 100%;
+    height: 100%;
+    overflow: hidden;
 }
 
 body {
@@ -40,11 +42,11 @@ body {
         linear-gradient(rgba(64, 64, 255, 0.03) 1px, transparent 1px),
         linear-gradient(90deg, rgba(64, 64, 255, 0.03) 1px, transparent 1px);
     background-size: 16px 16px;
-    min-height: 100vh;
+    height: 100vh;
     display: flex;
     justify-content: center;
-    align-items: flex-start;
-    padding: 80px 20px 24px;
+    align-items: center;
+    padding: 60px 12px 12px;
     color: var(--pixel-text);
 }
 
@@ -66,6 +68,61 @@ body::after {
 button,
 input {
     font: inherit;
+}
+
+/* ═══════════════════════════════════════════════
+   统一按钮基础样式（参考 DESIGN.md）
+   ═══════════════════════════════════════════════ */
+.btn {
+    border: 2px solid;
+    border-radius: 4px;
+    padding: 8px 16px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, opacity 0.15s;
+    font-family: inherit;
+}
+.btn:disabled {
+    background: var(--pixel-gray) !important;
+    border-color: var(--pixel-dark) !important;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+/* 主按钮 */
+.btn-primary {
+    background: var(--pixel-blue);
+    color: var(--pixel-white);
+    border-color: var(--pixel-light-blue);
+}
+.btn-primary:hover:not(:disabled) {
+    background: var(--pixel-light-blue);
+}
+/* 成功/确认按钮 */
+.btn-success {
+    background: var(--pixel-green);
+    color: var(--pixel-white);
+    border-color: #60ff60;
+}
+.btn-success:hover:not(:disabled) {
+    filter: brightness(1.15);
+}
+/* 危险/删除按钮 */
+.btn-danger {
+    background: var(--pixel-red);
+    color: var(--pixel-white);
+    border-color: #ff8080;
+}
+.btn-danger:hover:not(:disabled) {
+    filter: brightness(1.15);
+}
+/* 次要按钮 */
+.btn-secondary {
+    background: var(--pixel-dark);
+    color: var(--pixel-text);
+    border-color: var(--pixel-gray);
+}
+.btn-secondary:hover:not(:disabled) {
+    border-color: var(--pixel-cyan);
 }
 
 .hidden {
@@ -127,7 +184,7 @@ input {
     border: 2px solid var(--pixel-cyan);
     color: var(--pixel-cyan);
     padding: 6px 10px;
-    font-size: 8px;
+    font-size: 14px;
     box-shadow: 3px 3px 0 #2080a0;
 }
 
@@ -152,7 +209,7 @@ input {
     left: 4px;
     background: var(--pixel-bg);
     padding: 0 4px;
-    font-size: 7px;
+    font-size: 12px;
     color: var(--pixel-cyan);
 }
 
@@ -188,13 +245,13 @@ input {
 }
 
 .user-name {
-    font-size: 8px;
+    font-size: 14px;
     color: var(--pixel-white);
     text-shadow: 2px 2px 0 var(--pixel-black);
 }
 
 .user-role {
-    font-size: 6px;
+    font-size: 11px;
     color: var(--pixel-cyan);
     text-shadow: 1px 1px 0 var(--pixel-black);
 }
@@ -217,55 +274,65 @@ input {
    ============================ */
 .container {
     width: 100%;
-    max-width: 1320px;
+    max-width: 1400px;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
 }
 
 .screen {
     position: relative;
     width: 100%;
+    flex: 1;
+    min-height: 0;
     background: var(--pixel-panel);
     border: 4px solid var(--pixel-border);
     box-shadow:
         8px 8px 0 0 rgba(64, 64, 255, 0.5),
         inset -2px -2px 0 0 rgba(0,0,0,0.8),
         inset 2px 2px 0 0 rgba(255,255,255,0.05);
-    padding: 24px 28px;
+    padding: 8px 12px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--pixel-border) var(--pixel-panel);
 }
 
 .screen.hidden {
     display: none !important;
 }
 
-#loginScreen,
-#waitingScreen,
-#finishedScreen {
+#waitingScreen {
     text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
 }
 
 #loginScreen {
-    min-height: 420px;
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
-    padding-top: 20px;
-    padding-bottom: 20px;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 12px;
 }
 
 #loginScreen h1,
 #waitingScreen h1,
 #finishedScreen h1 {
-    margin: 0 0 12px;
+    margin: 0 0 8px;
     color: var(--pixel-yellow);
     text-shadow: 4px 4px 0 #806000, -2px -2px 0 #ffa000;
 }
 
-#loginScreen h1 { font-size: 28px; letter-spacing: 2px; }
-#waitingScreen h1, #finishedScreen h1 { font-size: 24px; }
+#loginScreen h1 { font-size: 36px; letter-spacing: 2px; }
+#waitingScreen h1, #finishedScreen h1 { font-size: 28px; }
 
 #loginScreen p {
     margin: 0;
     color: var(--pixel-cyan);
-    font-size: 8px;
+    font-size: 14px;
     text-shadow: 2px 2px 0 rgba(0, 128, 160, 0.6);
 }
 
@@ -276,13 +343,13 @@ input {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 20px;
+    gap: 12px;
 }
 
 .form {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 12px;
     max-width: 360px;
     margin: 0 auto;
     width: 100%;
@@ -292,7 +359,7 @@ input {
 .input-area input,
 .input-panel input,
 .clue-panel input {
-    padding: 14px 16px;
+    padding: 12px 14px;
     background: var(--pixel-black);
     border: 4px solid #404060;
     color: var(--pixel-text);
@@ -305,7 +372,7 @@ input {
 .input-panel input::placeholder,
 .clue-panel input::placeholder {
     color: #404060;
-    font-size: 8px;
+    font-size: 14px;
 }
 
 .form input:focus,
@@ -339,7 +406,7 @@ input {
 .input-area button,
 .detective-skills button,
 .skip-btn {
-    padding: 14px 20px;
+    padding: 12px 18px;
     border: none;
     cursor: pointer;
     text-transform: uppercase;
@@ -382,14 +449,13 @@ input {
     display: inline-block;
     margin-top: 24px;
     color: var(--pixel-accent);
-    font-size: 7px;
+    font-size: 12px;
 }
 
 /* ============================
    Waiting screen
    ============================ */
 #waitingScreen {
-    min-height: 420px;
 }
 
 #playerList {
@@ -403,10 +469,10 @@ input {
 .player-badge {
     background: var(--pixel-dark);
     color: var(--pixel-green);
-    padding: 10px 16px;
+    padding: 12px 20px;
     border: 2px solid var(--pixel-green);
     box-shadow: 2px 2px 0 0 #206020;
-    font-size: 8px;
+    font-size: 14px;
 }
 
 .player-badge::before {
@@ -416,7 +482,7 @@ input {
 
 #waitingHint {
     color: var(--pixel-cyan);
-    font-size: 8px;
+    font-size: 14px;
 }
 
 /* ============================
@@ -424,12 +490,14 @@ input {
    ============================ */
 #gameScreen {
     text-align: left;
+    display: flex;
+    flex-direction: column;
 }
 
 .game-layout {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 250px;
-    gap: 18px;
+    grid-template-columns: minmax(0, 1fr) 220px;
+    gap: 12px;
     align-items: start;
     width: 100%;
     margin: 0 auto;
@@ -439,13 +507,13 @@ input {
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: 6px;
 }
 
 .stage-shell {
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: 6px;
     align-items: center;
 }
 
@@ -453,14 +521,14 @@ input {
     width: min(100%, 720px);
     display: grid;
     grid-template-columns: 1.15fr 0.9fr 0.7fr 0.95fr;
-    gap: 10px;
+    gap: 6px;
     align-items: stretch;
 }
 
 .game-info > * {
     min-width: 0;
-    padding: 10px 12px;
-    font-size: 8px;
+    padding: 6px 8px;
+    font-size: 11px;
 }
 
 .phase-info,
@@ -489,8 +557,8 @@ input {
 
 .phase-hint {
     display: block;
-    font-size: 6px;
-    line-height: 1.5;
+    font-size: 10px;
+    line-height: 1.4;
     color: var(--pixel-white);
     opacity: 0.85;
     text-shadow: 1px 1px 0 var(--pixel-black);
@@ -498,13 +566,13 @@ input {
 
 .round-event-banner {
     width: min(100%, 660px);
-    margin: 0 auto 12px;
-    padding: 12px 16px;
+    margin: 0 auto 6px;
+    padding: 8px 12px;
     border: 3px solid var(--pixel-yellow);
     background: linear-gradient(180deg, rgba(255, 192, 64, 0.14), rgba(64, 64, 255, 0.08));
     color: var(--pixel-yellow);
-    font-size: 7px;
-    line-height: 1.6;
+    font-size: 10px;
+    line-height: 1.4;
     text-align: center;
     text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.6);
     box-shadow: 0 4px 0 rgba(128, 96, 0, 0.6);
@@ -549,7 +617,7 @@ input {
 .discussion-room,
 .round-table {
     position: relative;
-    width: min(100%, 660px);
+    width: min(100%, 246px);
     aspect-ratio: 1 / 1;
     margin: 0 auto;
     border-radius: 50%;
@@ -606,8 +674,8 @@ input {
 
 .player-avatar {
     position: absolute;
-    width: 96px;
-    height: 86px;
+    width: 60px;
+    height: 55px;
     display: flex;
     flex-direction: column;
     justify-content: flex-end;
@@ -619,8 +687,8 @@ input {
 }
 
 .player-avatar .avatar {
-    width: 56px;
-    height: 56px;
+    width: 36px;
+    height: 36px;
     position: relative;
     flex-shrink: 0;
     transform-origin: 50% 100%;
@@ -628,7 +696,7 @@ input {
 
 .player-avatar .name {
     margin-top: -2px;
-    font-size: 6px;
+    font-size: 9px;
     text-align: center;
     color: var(--pixel-white);
     text-shadow: 1px 1px 0 var(--pixel-black);
@@ -636,8 +704,8 @@ input {
 
 .player-avatar .player-seat {
     position: absolute;
-    width: 50px;
-    height: 16px;
+    width: 34px;
+    height: 12px;
     bottom: -2px;
     left: 50%;
     transform: translateX(-50%);
@@ -694,13 +762,13 @@ input {
 
 .persona-chip {
     position: absolute;
-    top: -20px;
+    top: -15px;
     left: 50%;
     transform: translateX(-50%);
-    padding: 2px 5px;
+    padding: 2px 4px;
     border: 1px solid rgba(255, 255, 255, 0.18);
     background: rgba(0, 0, 0, 0.55);
-    font-size: 5px;
+    font-size: 7px;
     letter-spacing: 0.5px;
     color: var(--pixel-white);
     white-space: nowrap;
@@ -730,16 +798,16 @@ input {
 
 .description {
     position: absolute;
-    top: -34px;
+    top: -22px;
     left: 50%;
     transform: translateX(-50%);
     background: var(--pixel-black);
     border: 2px solid var(--pixel-yellow);
     color: var(--pixel-yellow);
-    font-size: 6px;
-    padding: 4px 6px;
+    font-size: 8px;
+    padding: 2px 4px;
     white-space: nowrap;
-    max-width: 120px;
+    max-width: 80px;
     overflow: hidden;
     text-overflow: ellipsis;
 }
@@ -757,7 +825,7 @@ input {
     background: var(--pixel-black);
     border: 3px solid var(--pixel-border);
     box-shadow: 4px 4px 0 rgba(64,64,255,0.35);
-    padding: 14px 20px;
+    padding: 8px 12px;
     text-align: center;
 }
 
@@ -766,9 +834,9 @@ input {
 .debate-panel h3,
 .vote-panel h3,
 .defend-panel h3 {
-    margin: 0 0 12px;
+    margin: 0 0 8px;
     color: var(--pixel-cyan);
-    font-size: 9px;
+    font-size: 13px;
 }
 
 .input-panel h3 span { color: var(--pixel-yellow); }
@@ -793,7 +861,7 @@ input {
 .debate-panel p,
 .defend-panel p {
     color: var(--pixel-text);
-    font-size: 7px;
+    font-size: 12px;
     margin: 0 0 12px;
 }
 
@@ -810,7 +878,7 @@ input {
     background: var(--pixel-accent);
     color: var(--pixel-black);
     border: none;
-    font-size: 8px;
+    font-size: 14px;
     min-width: 140px;
     box-shadow: 0 4px 0 0 #802060, 2px 0 0 0 #802060;
     cursor: pointer;
@@ -828,7 +896,7 @@ input {
     background: #606060;
     color: var(--pixel-text);
     border: none;
-    font-size: 7px;
+    font-size: 12px;
     box-shadow: 0 3px 0 0 #303030;
     cursor: pointer;
 }
@@ -859,33 +927,34 @@ input {
     margin: 0 auto;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 6px;
     background: var(--pixel-black);
     border: 3px solid #303050;
     box-shadow: inset 2px 2px 0 rgba(0,0,0,0.5);
-    padding: 12px;
-    min-height: 180px;
+    padding: 8px;
+    min-height: 90px;
+    max-height: 130px;
 }
 
 .chat-area::before {
     content: '▌ GAME LOG ▌';
     display: block;
-    font-size: 7px;
+    font-size: 10px;
     color: #404060;
-    margin-bottom: 8px;
+    margin-bottom: 4px;
     border-bottom: 2px solid #202040;
-    padding-bottom: 4px;
+    padding-bottom: 2px;
 }
 
 .message-list {
     flex: 1;
-    max-height: 220px;
+    max-height: 80px;
     overflow-y: auto;
     padding-right: 4px;
     scrollbar-width: thin;
     scrollbar-color: var(--pixel-border) var(--pixel-black);
-    font-size: 7px;
-    line-height: 1.7;
+    font-size: 10px;
+    line-height: 1.5;
 }
 
 .message-list::-webkit-scrollbar { width: 6px; }
@@ -893,10 +962,10 @@ input {
 .message-list::-webkit-scrollbar-thumb { background: var(--pixel-border); }
 
 .message {
-    margin-bottom: 6px;
-    padding: 6px 10px;
-    font-size: 7px;
-    line-height: 1.6;
+    margin-bottom: 4px;
+    padding: 4px 8px;
+    font-size: 10px;
+    line-height: 1.5;
     white-space: pre-line;
     border: 1px solid transparent;
     background: rgba(255, 255, 255, 0.02);
@@ -938,20 +1007,20 @@ input {
 
 .input-area {
     display: flex;
-    gap: 8px;
+    gap: 6px;
 }
 
 .input-area input {
     flex: 1;
-    padding: 10px 12px;
+    padding: 8px 10px;
     background: var(--pixel-dark);
     border: 3px solid #303050;
     color: var(--pixel-text);
-    font-size: 9px;
+    font-size: 12px;
 }
 
 .input-area button {
-    padding: 10px 16px;
+    padding: 8px 12px;
     background: var(--pixel-gray);
     color: var(--pixel-text);
     border: none;
@@ -963,10 +1032,10 @@ input {
    Skill sidebar
    ============================ */
 .skill-sidebar {
-    width: 250px;
+    width: 220px;
     flex-shrink: 0;
     position: sticky;
-    top: 16px;
+    top: 12px;
 }
 
 .skill-panel {
@@ -975,56 +1044,56 @@ input {
     box-shadow:
         4px 4px 0 0 #2080a0,
         inset 0 0 0 2px rgba(64, 192, 255, 0.1);
-    padding: 16px;
+    padding: 12px;
     color: var(--pixel-text);
-    min-height: 280px;
+    min-height: 200px;
 }
 
 .skill-panel-title {
     color: var(--pixel-cyan);
-    font-size: 10px;
-    margin-bottom: 8px;
+    font-size: 14px;
+    margin-bottom: 4px;
     text-shadow: 2px 2px 0 var(--pixel-black);
 }
 
 .skill-panel-subtitle {
     color: var(--pixel-yellow);
-    font-size: 7px;
-    line-height: 1.6;
-    margin-bottom: 14px;
+    font-size: 10px;
+    line-height: 1.4;
+    margin-bottom: 8px;
 }
 
 .skill-panel-tip {
     display: flex;
     align-items: center;
     gap: 8px;
-    margin-bottom: 12px;
-    padding: 10px 12px;
+    margin-bottom: 8px;
+    padding: 8px 10px;
     border: 2px dashed rgba(64, 192, 255, 0.55);
     background: rgba(64, 64, 255, 0.08);
     color: var(--pixel-cyan);
-    font-size: 7px;
-    line-height: 1.5;
+    font-size: 10px;
+    line-height: 1.4;
 }
 
 .skill-panel-tip .tip-arrow {
-    font-size: 12px;
+    font-size: 18px;
     color: var(--pixel-yellow);
 }
 
 .skill-list {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 6px;
 }
 
 .skill-item {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 4px;
     align-items: flex-start;
     text-align: left;
-    padding: 12px;
+    padding: 8px 10px;
     border: 3px solid var(--pixel-gray);
     background: var(--pixel-dark);
     color: var(--pixel-text);
@@ -1047,18 +1116,18 @@ input {
 }
 
 .skill-name {
-    font-size: 8px;
+    font-size: 12px;
     color: var(--pixel-white);
 }
 
 .skill-count {
-    font-size: 7px;
+    font-size: 10px;
     color: var(--pixel-cyan);
 }
 
 .skill-help {
-    font-size: 6px;
-    line-height: 1.5;
+    font-size: 9px;
+    line-height: 1.4;
     color: #c8c8e8;
 }
 
@@ -1071,16 +1140,20 @@ input {
    ============================ */
 #finishedScreen {
     text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
 }
 
 .result-decoration {
-    font-size: 24px;
+    font-size: 36px;
     margin-bottom: 12px;
 }
 
 .reward-summary {
     margin: 12px 0 18px;
-    font-size: 8px;
+    font-size: 14px;
     line-height: 1.8;
 }
 
@@ -1095,7 +1168,7 @@ input {
 }
 
 .ai-profile-title {
-    font-size: 9px;
+    font-size: 15px;
     color: var(--pixel-cyan);
     margin-bottom: 10px;
 }
@@ -1115,13 +1188,13 @@ input {
 
 .profile-card .label {
     color: var(--pixel-yellow);
-    font-size: 6px;
+    font-size: 11px;
     margin-bottom: 6px;
 }
 
 .profile-card .value {
     color: var(--pixel-text);
-    font-size: 7px;
+    font-size: 12px;
     line-height: 1.6;
 }
 
@@ -1136,13 +1209,13 @@ input {
     border: 1px solid rgba(64, 192, 255, 0.35);
     background: rgba(64, 64, 255, 0.1);
     color: var(--pixel-cyan);
-    font-size: 6px;
+    font-size: 11px;
 }
 
 .profile-note {
     margin-top: 10px;
     color: var(--pixel-white);
-    font-size: 6px;
+    font-size: 11px;
     line-height: 1.6;
     opacity: 0.9;
 }
@@ -1193,7 +1266,7 @@ input {
     top: -35px;
     left: 50%;
     transform: translateX(-50%);
-    font-size: 6px;
+    font-size: 11px;
     color: var(--pixel-yellow);
     white-space: nowrap;
 }
@@ -1244,5 +1317,720 @@ input {
     .vote-panel,
     .defend-panel {
         width: 100%;
+    }
+}
+
+/* ============================
+   Debug Panel
+   ============================ */
+.debug-panel {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 350px;
+    max-height: 600px;
+    background: var(--pixel-panel);
+    border: 2px solid var(--pixel-border);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    overflow: hidden;
+    font-size: 10px;
+    transition: all 0.3s ease;
+}
+
+.debug-panel.collapsed .debug-content {
+    display: none;
+}
+
+.debug-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background: var(--pixel-dark);
+    border-bottom: 1px solid var(--pixel-border);
+    cursor: pointer;
+}
+
+.debug-header h3 {
+    margin: 0;
+    font-size: 11px;
+    color: var(--pixel-yellow);
+}
+
+.debug-toggle {
+    background: none;
+    border: none;
+    color: var(--pixel-text);
+    font-size: 12px;
+    cursor: pointer;
+    padding: 2px 6px;
+}
+
+.debug-toggle:hover {
+    color: var(--pixel-yellow);
+}
+
+.debug-content {
+    padding: 10px;
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+.debug-section {
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--pixel-gray);
+}
+
+.debug-section:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+.debug-section h4 {
+    margin: 0 0 8px 0;
+    font-size: 10px;
+    color: var(--pixel-cyan);
+}
+
+.debug-controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+}
+
+.debug-btn {
+    background: var(--pixel-dark);
+    border: 1px solid var(--pixel-border);
+    color: var(--pixel-text);
+    padding: 6px 8px;
+    font-family: inherit;
+    font-size: 9px;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.debug-btn:hover {
+    background: var(--pixel-gray);
+    color: var(--pixel-yellow);
+}
+
+.debug-btn.small {
+    padding: 4px 6px;
+    font-size: 8px;
+}
+
+.phase-buttons {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+}
+
+.ai-status-list {
+    max-height: 150px;
+    overflow-y: auto;
+}
+
+.ai-status-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 6px;
+    margin-bottom: 4px;
+    background: var(--pixel-dark);
+    border-radius: 4px;
+    font-size: 9px;
+}
+
+.ai-status-item .ai-name {
+    font-weight: bold;
+    color: var(--pixel-green);
+}
+
+.ai-status-item .ai-role {
+    color: var(--pixel-yellow);
+    margin-left: 8px;
+}
+
+.ai-status-item .ai-vote {
+    color: var(--pixel-cyan);
+}
+
+.game-status-info {
+    font-size: 9px;
+    line-height: 1.4;
+}
+
+.game-status-info p {
+    margin: 2px 0;
+    color: var(--pixel-text);
+}
+
+.game-status-info .label {
+    color: var(--pixel-gray-light);
+    display: inline-block;
+    width: 80px;
+}
+
+.game-status-info .value {
+    color: var(--pixel-green);
+}
+
+.debug-log {
+    max-height: 120px;
+    overflow-y: auto;
+    background: var(--pixel-black);
+    border: 1px solid var(--pixel-gray);
+    border-radius: 4px;
+    padding: 6px;
+    font-size: 8px;
+    font-family: monospace;
+}
+
+.debug-log-entry {
+    margin-bottom: 3px;
+    color: var(--pixel-text);
+    word-break: break-word;
+}
+
+.debug-log-entry.time {
+    color: var(--pixel-gray-light);
+}
+
+.debug-log-entry.info {
+    color: var(--pixel-cyan);
+}
+
+.debug-log-entry.success {
+    color: var(--pixel-green);
+}
+
+.debug-log-entry.error {
+    color: var(--pixel-red);
+}
+
+.debug-log-entry.warning {
+    color: var(--pixel-yellow);
+}
+
+/* 调试面板按钮状态 */
+.debug-btn.paused {
+    background: var(--pixel-yellow);
+    color: var(--pixel-black);
+}
+
+.debug-btn.active {
+    background: var(--pixel-green);
+    color: var(--pixel-black);
+}
+
+/* ============================
+   移动端响应式优化
+   ============================ */
+@media (max-width: 768px) {
+    .debug-panel {
+        width: 300px;
+        right: 10px;
+        bottom: 10px;
+    }
+    
+    .debug-controls {
+        grid-template-columns: 1fr;
+    }
+    
+    .phase-buttons {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    /* 移动端整体优化 */
+    body {
+        padding: 40px 8px 8px;
+    }
+    
+    .user-info {
+        top: 8px;
+        left: 8px;
+        padding: 8px 12px;
+        border-width: 3px;
+    }
+    
+    .user-info::before {
+        font-size: 10px;
+        top: -12px;
+    }
+    
+    .user-avatar {
+        width: 40px;
+        height: 40px;
+    }
+    
+    .user-avatar::before {
+        background-image:
+            linear-gradient(#8B4513, #8B4513) 11px 22px / 20px 24px,
+            linear-gradient(#DEB887, #DEB887) 10px 3px / 20px 18px,
+            linear-gradient(#4A3728, #4A3728) 9px 1px / 22px 8px,
+            linear-gradient(#000, #000) 13px 9px / 5px 6px,
+            linear-gradient(#000, #000) 22px 9px / 5px 6px,
+            linear-gradient(#000, #000) 15px 13px / 10px 3px,
+            linear-gradient(#DEB887, #DEB887) 5px 18px / 7px 8px,
+            linear-gradient(#DEB887, #DEB887) 28px 18px / 7px 8px,
+            linear-gradient(#000, #000) 11px 34px / 8px 4px,
+            linear-gradient(#000, #000) 20px 34px / 8px 4px;
+    }
+    
+    .user-name {
+        font-size: 12px;
+    }
+    
+    .user-role {
+        font-size: 10px;
+    }
+    
+    .restart-btn {
+        min-width: 100px;
+        min-height: 36px;
+        padding: 8px 12px;
+        font-size: 12px;
+    }
+    
+    .mode-toggle {
+        top: 8px;
+        right: 8px;
+        gap: 6px;
+    }
+    
+    .mode-toggle-btn {
+        min-width: 100px;
+        padding: 8px 12px;
+        font-size: 12px;
+    }
+    
+    .mode-status {
+        top: 52px;
+        right: 8px;
+        padding: 4px 8px;
+        font-size: 12px;
+    }
+    
+    /* 登录屏幕移动端优化 */
+    #loginScreen h1 {
+        font-size: 28px;
+        letter-spacing: 1px;
+    }
+    
+    #loginScreen p {
+        font-size: 12px;
+    }
+    
+    .form {
+        max-width: 100%;
+        padding: 0 12px;
+    }
+    
+    .form input {
+        padding: 10px 12px;
+        font-size: 12px;
+    }
+    
+    .form button,
+    .pixel-btn {
+        padding: 10px 16px;
+        font-size: 12px;
+    }
+    
+    /* 游戏屏幕移动端优化 */
+    #gameScreen {
+        padding: 6px;
+    }
+    
+    .game-layout {
+        gap: 8px;
+    }
+    
+    .game-info {
+        grid-template-columns: 1fr;
+        gap: 4px;
+    }
+    
+    .game-info > * {
+        padding: 4px 6px;
+        font-size: 10px;
+    }
+    
+    .discussion-room,
+    .round-table {
+        width: min(100%, 200px);
+    }
+    
+    .player-avatar {
+        width: 50px;
+        height: 45px;
+    }
+    
+    .player-avatar .avatar {
+        width: 30px;
+        height: 30px;
+    }
+    
+    .player-avatar .name {
+        font-size: 8px;
+    }
+    
+    .description {
+        font-size: 7px;
+        padding: 1px 3px;
+        max-width: 60px;
+        top: -18px;
+    }
+    
+    /* 面板移动端优化 */
+    .input-panel,
+    .clue-panel,
+    .debate-panel,
+    .vote-panel,
+    .defend-panel {
+        padding: 6px 8px;
+    }
+    
+    .input-panel h3,
+    .clue-panel h3,
+    .debate-panel h3,
+    .vote-panel h3,
+    .defend-panel h3 {
+        font-size: 12px;
+        margin-bottom: 6px;
+    }
+    
+    .input-panel input {
+        padding: 10px 12px;
+        font-size: 12px;
+        margin-bottom: 8px;
+    }
+    
+    .input-panel button,
+    .action-buttons button,
+    .vote-panel button {
+        padding: 10px 14px;
+        font-size: 12px;
+    }
+    
+    .detective-skills button {
+        padding: 8px 12px;
+        font-size: 12px;
+        min-width: 120px;
+    }
+    
+    /* 聊天区域移动端优化 */
+    .chat-area {
+        padding: 6px;
+        min-height: 80px;
+        max-height: 120px;
+    }
+    
+    .chat-area::before {
+        font-size: 9px;
+    }
+    
+    .message-list {
+        max-height: 70px;
+        font-size: 9px;
+    }
+    
+    .message {
+        padding: 3px 6px;
+        font-size: 9px;
+    }
+    
+    .input-area input {
+        padding: 6px 8px;
+        font-size: 11px;
+    }
+    
+    .input-area button {
+        padding: 6px 10px;
+        font-size: 11px;
+    }
+    
+    /* 技能侧边栏移动端优化 */
+    .skill-sidebar {
+        width: 100%;
+        position: static;
+    }
+    
+    .skill-panel {
+        padding: 8px;
+        min-height: 150px;
+    }
+    
+    .skill-panel-title {
+        font-size: 12px;
+    }
+    
+    .skill-panel-subtitle {
+        font-size: 9px;
+    }
+    
+    .skill-panel-tip {
+        padding: 6px 8px;
+        font-size: 9px;
+    }
+    
+    .skill-item {
+        padding: 6px 8px;
+    }
+    
+    .skill-name {
+        font-size: 11px;
+    }
+    
+    .skill-count {
+        font-size: 9px;
+    }
+    
+    .skill-help {
+        font-size: 8px;
+    }
+    
+    /* 结果屏幕移动端优化 */
+    #finishedScreen h1 {
+        font-size: 24px;
+    }
+    
+    .result-decoration {
+        font-size: 28px;
+        margin-bottom: 8px;
+    }
+    
+    .reward-summary {
+        font-size: 12px;
+        margin: 8px 0 12px;
+    }
+    
+    .ai-profile-summary {
+        padding: 10px;
+    }
+    
+    .ai-profile-title {
+        font-size: 13px;
+        margin-bottom: 8px;
+    }
+    
+    .ai-profile-grid {
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
+    
+    .profile-card {
+        padding: 8px;
+    }
+    
+    .profile-card .label {
+        font-size: 10px;
+    }
+    
+    .profile-card .value {
+        font-size: 11px;
+    }
+    
+    .profile-trail .trail-chip {
+        padding: 3px 5px;
+        font-size: 10px;
+    }
+    
+    .profile-note {
+        font-size: 10px;
+    }
+    
+    /* 等待屏幕移动端优化 */
+    #waitingScreen h1 {
+        font-size: 24px;
+    }
+    
+    #playerList {
+        gap: 8px;
+        margin: 12px 0;
+    }
+    
+    .player-badge {
+        padding: 8px 16px;
+        font-size: 12px;
+    }
+    
+    #waitingHint {
+        font-size: 12px;
+    }
+}
+
+/* 超小屏幕优化 (iPhone SE等) */
+@media (max-width: 480px) {
+    body {
+        padding: 36px 6px 6px;
+    }
+    
+    #loginScreen h1 {
+        font-size: 24px;
+    }
+    
+    .user-info {
+        padding: 6px 10px;
+    }
+    
+    .user-avatar {
+        width: 36px;
+        height: 36px;
+    }
+    
+    .user-avatar::before {
+        background-image:
+            linear-gradient(#8B4513, #8B4513) 10px 20px / 18px 22px,
+            linear-gradient(#DEB887, #DEB887) 9px 3px / 18px 16px,
+            linear-gradient(#4A3728, #4A3728) 8px 1px / 20px 7px,
+            linear-gradient(#000, #000) 12px 8px / 4px 5px,
+            linear-gradient(#000, #000) 20px 8px / 4px 5px,
+            linear-gradient(#000, #000) 14px 12px / 8px 3px,
+            linear-gradient(#DEB887, #DEB887) 4px 16px / 6px 7px,
+            linear-gradient(#DEB887, #DEB887) 26px 16px / 6px 7px,
+            linear-gradient(#000, #000) 10px 30px / 7px 3px,
+            linear-gradient(#000, #000) 19px 30px / 7px 3px;
+    }
+    
+    .user-name {
+        font-size: 11px;
+    }
+    
+    .user-role {
+        font-size: 9px;
+    }
+    
+    .restart-btn,
+    .mode-toggle-btn {
+        min-width: 90px;
+        min-height: 32px;
+        padding: 6px 10px;
+        font-size: 11px;
+    }
+    
+    .mode-status {
+        font-size: 11px;
+    }
+    
+    .discussion-room,
+    .round-table {
+        width: min(100%, 180px);
+    }
+    
+    .player-avatar {
+        width: 45px;
+        height: 40px;
+    }
+    
+    .player-avatar .avatar {
+        width: 28px;
+        height: 28px;
+    }
+    
+    .player-avatar .name {
+        font-size: 7px;
+    }
+    
+    .description {
+        font-size: 6px;
+        max-width: 50px;
+    }
+    
+    .skill-panel {
+        padding: 6px;
+        min-height: 120px;
+    }
+    
+    .skill-panel-title {
+        font-size: 11px;
+    }
+    
+    .skill-item {
+        padding: 5px 6px;
+    }
+    
+    .skill-name {
+        font-size: 10px;
+    }
+    
+    .skill-help {
+        font-size: 7px;
+    }
+    
+    .message-list {
+        max-height: 60px;
+        font-size: 8px;
+    }
+    
+    .message {
+        padding: 2px 4px;
+        font-size: 8px;
+    }
+}
+
+/* 横屏优化 */
+@media (max-height: 500px) and (orientation: landscape) {
+    body {
+        padding: 36px 8px 8px;
+    }
+    
+    .game-layout {
+        grid-template-columns: 1fr 180px;
+        gap: 8px;
+    }
+    
+    .skill-sidebar {
+        width: 180px;
+        position: static;
+    }
+    
+    .skill-panel {
+        min-height: 100px;
+        padding: 6px;
+    }
+    
+    .skill-panel-title {
+        font-size: 10px;
+        margin-bottom: 2px;
+    }
+    
+    .skill-panel-subtitle {
+        font-size: 8px;
+        margin-bottom: 4px;
+    }
+    
+    .skill-list {
+        gap: 4px;
+    }
+    
+    .skill-item {
+        padding: 4px 6px;
+    }
+    
+    .skill-name {
+        font-size: 9px;
+    }
+    
+    .skill-count {
+        font-size: 8px;
+    }
+    
+    .skill-help {
+        font-size: 7px;
+    }
+    
+    .chat-area {
+        min-height: 60px;
+        max-height: 80px;
+    }
+    
+    .message-list {
+        max-height: 40px;
     }
 }

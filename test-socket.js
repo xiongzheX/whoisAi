@@ -14,8 +14,8 @@ console.log('');
 
 // 配置
 const SERVER_URL = 'http://localhost:3000';
-const TEST_ROOM = 'test-room-' + Date.now();
-const TEST_PLAYER = 'TestPlayer-' + Date.now().toString().substr(-4);
+const TEST_ROOM = 'test' + Date.now().toString().substr(-4);
+const TEST_PLAYER = 'Test' + Date.now().toString().substr(-4);
 
 let socket = null;
 let testResults = {
@@ -74,15 +74,14 @@ function runTest() {
             }
         });
 
-        // 游戏开始事件
-        socket.on('gameStarted', ({ word, players, wordDifficulty, roundNumber }) => {
-            log('游戏开始事件触发！', 'success');
+        // 游戏开始事件（角色揭示）
+        socket.on('rolesRevealed', ({ role, roleLabel, roleDescription, players }) => {
+            log('游戏开始事件触发！（角色揭示）', 'success');
             testResults.gameStarted = true;
             gameStartCount += 1;
 
-            log(`单词: ${word}`, 'success');
-            log(`难度: ${wordDifficulty || '默认'}`, 'success');
-            log(`回合: ${roundNumber || 'N/A'}`, 'success');
+            log(`角色: ${roleLabel}`, 'success');
+            log(`角色描述: ${roleDescription}`, 'success');
             log(`参与玩家: ${players.length} 人`, 'success');
 
             const names = players.map(p => p.name);
@@ -110,7 +109,9 @@ function runTest() {
             }, 3000);
         });
 
-        socket.on('roomReset', ({ roomId }) => {
+        socket.on('roomReset', (data) => {
+            // 服务器可能发送空数据或包含roomId的数据
+            const roomId = (data && data.roomId) || TEST_ROOM;
             if (roomId !== TEST_ROOM) return;
             log(`房间已重置: ${roomId}`, 'success');
             testResults.roomReset = true;

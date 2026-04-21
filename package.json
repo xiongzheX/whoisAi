@@ -3,8 +3,9 @@
   "version": "1.0.0",
   "description": "谁是AI - AI伪装游戏",
   "scripts": {
+    "start": "node server/app.js",
     "server": "node server/server.js",
-    "check": "node -c server/server.js && node -c client/js/ui-rendering.js && node -c client/js/game.js && node -c test-socket.js",
+    "check": "node -c server/server.js && node -c client/js/stage.js && node -c client/js/game.js && node -c test-socket.js",
     "test:socket": "node test-socket.js",
     "test": "npm run check && npm run test:socket"
   },
