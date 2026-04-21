@@ -101,18 +101,25 @@ class PlayerStage {
     const padding = 30;  // 减小边距
     const usableW = w - padding * 2;
 
-    // 弧形参数：椭圆中心在 canvas 下方
+    // 弧形参数：椭圆中心在 canvas 中心偏下
     const cx = w / 2;
-    const cy = h + 60;           // 椭圆中心在画面下方
+    const cy = 80;               // 调整椭圆中心位置（原来h+60=220）
     const rx = usableW / 2;      // 水平半径
-    const ry = 100;              // 垂直半径
+    const ry = 50;               // 减小垂直半径（原来100）
 
     for (let i = 0; i < n; i++) {
       const t = n > 1 ? (i / (n - 1)) * Math.PI : Math.PI / 2;
       // 从左到右，角度从 π 到 0
       const angle = Math.PI - t;
-      this.players[i].x = cx + rx * Math.cos(angle);
-      this.players[i].y = cy - ry * Math.sin(angle);
+      let x = cx + rx * Math.cos(angle);
+      let y = cy - ry * Math.sin(angle);
+      
+      // 确保小人在Canvas范围内
+      x = Math.max(padding, Math.min(w - padding, x));
+      y = Math.max(40, Math.min(h - 40, y)); // 留出更多空间给头部、皇冠和名字标签
+      
+      this.players[i].x = x;
+      this.players[i].y = y;
     }
   }
 
@@ -236,7 +243,8 @@ class PlayerStage {
     ctx.setLineDash([4, 4]);
     ctx.beginPath();
     const radiusX = Math.max(10, w / 2 - 40); // 确保半径为正数
-    ctx.ellipse(w / 2, h + 60, radiusX, 80, 0, Math.PI, 0);
+    // 调整桌面弧线位置，与小人位置匹配
+    ctx.ellipse(w / 2, 80, radiusX, 50, 0, Math.PI, 0);
     ctx.stroke();
     ctx.setLineDash([]);
     ctx.restore();
