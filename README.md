@@ -29,6 +29,9 @@
 ### 游戏界面
 ![游戏界面](screenshots/game-screen.png)
 
+### 修复后的游戏界面（小人角色完整显示）
+![修复后的游戏界面](screenshots/game-screen-fixed.png)
+
 ## 🚀 快速开始
 
 ### 1. 安装依赖
