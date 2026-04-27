@@ -3,6 +3,15 @@
  * 包含任务阶段、谜题讨论、投票、揭晓等逻辑
  */
 
+// 简易日志函数（utils.js 移除此功能）
+function logGame(roomId, msg) {
+  console.log(`[GAME] ${roomId}: ${msg}`);
+}
+function logWarn(roomId, msg) {
+  console.warn(`[WARN] ${roomId}: ${msg}`);
+}
+
+
 const { rooms } = require('./roomService');
 const {
   ROLES, ROLE_FACTION, GAME_CONSTANTS
