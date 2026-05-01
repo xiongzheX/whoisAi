@@ -148,7 +148,7 @@ function timer(room, normalSeconds) {
 }
 
 /**
- * 获取角色描述（信号员额外获得角色列表信息）
+ * 获取角色描述（侦测者额外获得角色列表信息）
  * @param {string} role - 角色
  * @param {Object} allRoles - 所有角色
  * @param {string} playerId - 玩家ID
@@ -157,7 +157,7 @@ function timer(room, normalSeconds) {
 function getRoleDescription(role, allRoles, playerId) {
   const base = ROLE_DESCRIPTIONS[role];
   if (role === 'signal_keeper') {
-    // 信号员知道自己是信号员
+    // 侦测者知道自己是侦测者
     return base;
   }
   return base;

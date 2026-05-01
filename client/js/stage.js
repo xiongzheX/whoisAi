@@ -14,9 +14,9 @@
 const COLORS = {
   bg:         '#0d0d1a',
   panel:      '#1e1e2e',
-  blue:       '#4040ff',   // 工程师
+  blue:       '#4040ff',   // 守护者
   red:        '#ff4040',   // 渗透者
-  green:      '#40c040',   // 信号员
+  green:      '#40c040',   // 侦测者
   gray:       '#41436a',   // 未知
   white:      '#f0f0f0',   // 名字、高光
   yellow:     '#ffc040',   // 队长标记

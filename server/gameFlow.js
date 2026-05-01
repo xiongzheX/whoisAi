@@ -5,7 +5,7 @@
  *   1. 提名阶段（队长提名小队）
  *   2. 讨论阶段（受限打字聊天，有人可能被 AI 附身）
  *   3. 全员投票（同意/反对这个小队）
- *   4. 执行阶段（小队成员投票成功/破坏）
+ *   4. 执行阶段（小队成员讨论危机场景并选择行动方案）
  *   5. 结算（检查胜负条件）
  *
  * 游戏配置（6人局）：
@@ -32,7 +32,11 @@ function createGameFlow({ io }) {
   // 创建各个模块的处理器
   const phaseHandlers = createPhaseHandlers({ io });
   const aiHandlers = createAIHandlers({ io });
-  const missionHandlers = createMissionHandlers({ io });
+  const missionHandlers = createMissionHandlers({
+    io,
+    onGameOver: (roomId, winner) => phaseHandlers.endGame(roomId, winner),
+    onNextRound: (roomId) => phaseHandlers.startRound(roomId)
+  });
   
   // 设置任务处理器依赖，解决循环依赖
   setMissionHandlers(missionHandlers);

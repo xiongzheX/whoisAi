@@ -7,44 +7,44 @@
 //  角色定义
 // ═══════════════════════════════════════
 const ROLES = {
-  ENGINEER: 'engineer',           // 工程师（好人阵营）
-  INFILTRATOR: 'infiltrator',     // 渗透者（坏人阵营）
-  SIGNAL_KEEPER: 'signal_keeper', // 信号员（好人阵营，特殊）
-  OBSERVER: 'observer',           // 观察者（好人阵营，新增）
-  PROTECTOR: 'protector',         // 保护者（好人阵营，新增）
-  DISRUPTOR: 'disruptor'          // 干扰者（坏人阵营，新增）
+  ENGINEER: 'engineer',           // 守护者（守护者阵营，兼容旧 key）
+  INFILTRATOR: 'infiltrator',     // 渗透者（渗透者阵营）
+  SIGNAL_KEEPER: 'signal_keeper', // 侦测者（守护者阵营，特殊）
+  OBSERVER: 'observer',           // 观察者（守护者阵营，新增）
+  PROTECTOR: 'protector',         // 护卫（守护者阵营，新增）
+  DISRUPTOR: 'disruptor'          // 伪装者（渗透者阵营，新增）
 };
 
 const ROLE_LABELS = {
-  [ROLES.ENGINEER]: '🔧 工程师',
+  [ROLES.ENGINEER]: '🛡️ 守护者',
   [ROLES.INFILTRATOR]: '🦠 渗透者',
-  [ROLES.SIGNAL_KEEPER]: '📡 信号员',
+  [ROLES.SIGNAL_KEEPER]: '📡 侦测者',
   [ROLES.OBSERVER]: '👁️ 观察者',
-  [ROLES.PROTECTOR]: '🛡️ 保护者',
-  [ROLES.DISRUPTOR]: '🎭 干扰者'
+  [ROLES.PROTECTOR]: '🛡️ 护卫',
+  [ROLES.DISRUPTOR]: '🎭 伪装者'
 };
 
 const ROLE_DESCRIPTIONS = {
   [ROLES.ENGINEER]:
-    '你是系统维护团队的工程师。你的任务是完成 3 次成功的系统维护，或找出并淘汰渗透者。' +
+    '你属于守护者阵营。你的目标是找出可信小队，推动 3 次任务成功。' +
     '在讨论中观察谁的发言风格异常——他们可能被 AI 附身了。',
   [ROLES.INFILTRATOR]:
-    '你是潜伏在团队中的渗透者。你的目标是破坏 3 次系统维护任务。' +
-    '在讨论中你需要表现得像个正常工程师，投票时投"同意"来伪装，' +
-    '但在执行任务时投"破坏"来制造失败。小心不要暴露！',
+    '你是潜伏在队伍中的渗透者。你的目标是让 3 次任务失败。' +
+    '在讨论中你需要表现得像个守护者，投票时可投"同意"来伪装，' +
+    '但在任务阶段应诱导小队选择高风险行动。小心不要暴露！',
   [ROLES.SIGNAL_KEEPER]:
-    '你是团队的信号员。你拥有特殊能力：每轮开始时，你能感知系统中是否存在异常信号——' +
+    '你是团队的侦测者。你拥有特殊能力：每轮开始时，你能感知队伍中是否存在异常信号——' +
     '也就是说，你知道本轮是否有人被 AI 附身了（但你不知道是谁）。' +
     '利用这个信息引导讨论，但不要过早暴露你的身份，否则渗透者会针对你。' +
-    '你的胜利条件和工程师相同。',
+    '你的胜利条件和守护者相同。',
   [ROLES.OBSERVER]:
     '你是团队的观察者。你拥有特殊能力：每轮可以查看一名玩家的投票历史。' +
-    '通过分析投票模式，找出可疑的玩家。你的胜利条件和工程师相同。',
+    '通过分析投票模式，找出可疑的玩家。你的胜利条件和守护者相同。',
   [ROLES.PROTECTOR]:
-    '你是团队的保护者。你拥有特殊能力：每轮可以保护一名玩家不被 AI 附身。' +
-    '保护关键玩家，防止他们的消息被改写。你的胜利条件和工程师相同。',
+    '你是团队的护卫。你拥有特殊能力：每轮可以保护一名玩家不被 AI 附身。' +
+    '保护关键玩家，降低发言被改写的风险。你的胜利条件和守护者相同。',
   [ROLES.DISRUPTOR]:
-    '你是潜伏在团队中的干扰者。你拥有特殊能力：每轮可以改变一名玩家的投票。' +
+    '你是潜伏在团队中的伪装者。你拥有特殊能力：每轮可以改变一名玩家的投票。' +
     '利用这个能力制造混乱，帮助渗透者获胜。你的胜利条件和渗透者相同。'
 };
 
@@ -81,7 +81,7 @@ function assignRoles(playerIds) {
   const dist = getRoleDistribution(playerIds.length);
   const roles = [];
 
-  // 添加工程师
+  // 添加守护者
   for (let i = 0; i < dist.engineers; i++) roles.push(ROLES.ENGINEER);
   
   // 添加固定角色
@@ -161,7 +161,7 @@ const POSSESSION_STYLES = {
   neutral: {
     label: '太中立',
     description: '把绝对化表述变模糊',
-    // "他肯定是坏人" → "他的行为确实有些可疑"
+    // "他肯定是渗透者" → "他的行为确实有些可疑"
   },
   awkward: {
     label: '太新',

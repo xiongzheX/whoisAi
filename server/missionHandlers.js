@@ -30,7 +30,7 @@ const {
  * @param {Object} options.io - Socket.IO 实例
  * @returns {Object} 任务处理器函数
  */
-function createMissionHandlers({ io }) {
+function createMissionHandlers({ io, onGameOver, onNextRound }) {
   
   /**
    * 执行阶段入口 → 直接发题
@@ -285,7 +285,7 @@ function createMissionHandlers({ io }) {
           // 被附身的 AI 投扭曲版答案
           answer = room.distortedPuzzle.correctAnswer;
         } else if (isInf && Math.random() < 0.7) {
-          // 渗透者 70% 概率破坏（选错误答案）
+          // 渗透者 70% 概率选择高风险行动方案
           const options = Object.keys(room.currentPuzzle.options);
           const wrongOptions = options.filter(o => o !== room.currentPuzzle.correctAnswer);
           answer = wrongOptions[Math.floor(Math.random() * wrongOptions.length)];
@@ -418,7 +418,7 @@ function createMissionHandlers({ io }) {
       missionResults: room.missionResults,
       missionSuccesses: room.missionSuccesses,
       missionFailures: room.missionFailures,
-      // 信号员额外信息
+      // 侦测者额外信息
       hadPossession: !!room.possessedPlayer,
     });
 
@@ -437,20 +437,17 @@ function createMissionHandlers({ io }) {
 
       // 检查胜负
       if (room.missionSuccesses >= GAME_CONSTANTS.MISSIONS_TO_WIN) {
-        // 通过事件触发游戏结束，避免循环依赖
-        io.to(roomId).emit('gameOver', { winner: 'engineer' });
+        if (onGameOver) onGameOver(roomId, 'engineer');
         return;
       }
       if (room.missionFailures >= GAME_CONSTANTS.MISSIONS_TO_WIN) {
-        // 通过事件触发游戏结束，避免循环依赖
-        io.to(roomId).emit('gameOver', { winner: 'infiltrator' });
+        if (onGameOver) onGameOver(roomId, 'infiltrator');
         return;
       }
 
       // 下一轮
       room.rejectStreak = 0;
-      // 通过事件触发新一轮，避免循环依赖
-      io.to(roomId).emit('nextRound', { roomId });
+      if (onNextRound) onNextRound(roomId);
     }, timer(room, GAME_CONSTANTS.PUZZLE_REVEAL_TIME) * 1000);
   }
 

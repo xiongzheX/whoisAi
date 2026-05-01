@@ -40,14 +40,14 @@
     <div id="loginScreen" class="screen login-screen" role="main" aria-label="登录界面">
         <div class="login-hero">
             <div class="glitch-container">
-                <h1 class="game-title" data-text="谁是AI">谁是AI</h1>
+                <h1 class="game-title" data-text="谁是AI" aria-label="谁是AI"><span aria-hidden="true">谁是AI</span></h1>
             </div>
             <p class="game-subtitle">🤖 阿瓦隆式社交推理 · AI附身干扰 🧠</p>
-            <p class="game-desc">6人局 · 找出渗透者 · 完成3次任务</p>
+            <p class="game-desc">5-8人局 · 推荐6人 · 完成3次任务</p>
             <div class="tagline">
-                <span class="tagline-item">🎯 考验你的推理能力</span>
-                <span class="tagline-item">🕵️ 揭露AI的身份</span>
-                <span class="tagline-item">🎭 演技大考验</span>
+                <span class="tagline-item">🎯 判断小队是否可信</span>
+                <span class="tagline-item">🕵️ 找出潜伏渗透者</span>
+                <span class="tagline-item">🧩 判断谁在推动失败</span>
             </div>
         </div>
         <div class="login-form" role="form" aria-label="登录表单">
@@ -62,13 +62,17 @@
                 <div class="input-hint">和朋友输入相同房间号一起玩</div>
             </div>
             <div class="mode-toggle" role="group" aria-label="游戏模式">
-                <button type="button" class="mode-btn active" data-mode="test" onclick="setMode('test')" aria-pressed="true" aria-describedby="testModeDesc">
+                <button type="button" class="mode-btn active" data-mode="normal" onclick="setMode('normal')" aria-pressed="true" aria-describedby="normalModeDesc">
+                    <span class="mode-icon">🌐</span>正常模式
+                </button>
+                <button type="button" class="mode-btn" data-mode="test" onclick="setMode('test')" aria-pressed="false" aria-describedby="testModeDesc">
                     <span class="mode-icon">🧪</span>测试模式
                 </button>
                 <button type="button" class="mode-btn" data-mode="solo" onclick="setMode('solo')" aria-pressed="false" aria-describedby="soloModeDesc">
                     <span class="mode-icon">🎮</span>单人调试
                 </button>
             </div>
+            <div id="normalModeDesc" class="sr-only">正常联机模式，需要朋友输入相同房间号加入</div>
             <div id="testModeDesc" class="sr-only">快速测试游戏，自动添加AI玩家</div>
             <div id="soloModeDesc" class="sr-only">单人调试模式，自动添加AI玩家并开始游戏</div>
             <button id="joinBtn" class="join-btn" onclick="joinGame()" aria-label="开始游戏">
@@ -81,17 +85,17 @@
             <div class="quick-tips">
                 <p class="tips-title">💡 快速提示</p>
                 <ul class="tips-list">
-                    <li>好人阵营：完成3次任务获胜</li>
-                    <li>坏人阵营：破坏3次任务获胜</li>
-                    <li>每轮有AI附身干扰，信号员可检测</li>
+                    <li>正常模式需要朋友输入相同房间号加入</li>
+                    <li>测试模式会自动补 AI，适合快速开局验证</li>
+                    <li>守护者找可信小队，渗透者诱导任务失败</li>
                 </ul>
             </div>
         </div>
         <div class="login-footer">
-            <p>6人 · 5轮 · 约10-15分钟 · 支持手机和电脑</p>
+            <p>5-8人 · 推荐6人 · 5轮 · 约10-15分钟 · 支持手机和电脑</p>
             <div class="social-proof">
-                <span class="proof-item">🔥 超过1000局已开</span>
-                <span class="proof-item">⭐ 4.9分好评</span>
+                <span class="proof-item">🌐 正常模式好友同局</span>
+                <span class="proof-item">🧪 测试模式自动补 AI</span>
             </div>
         </div>
     </div>
@@ -142,6 +146,16 @@
                     <div class="slot-name">等待中...</div>
                     <div class="slot-status">准备中</div>
                 </div>
+                <div class="player-slot" id="slot6" role="listitem">
+                    <div class="slot-avatar">👤</div>
+                    <div class="slot-name">等待中...</div>
+                    <div class="slot-status">准备中</div>
+                </div>
+                <div class="player-slot" id="slot7" role="listitem">
+                    <div class="slot-avatar">👤</div>
+                    <div class="slot-name">等待中...</div>
+                    <div class="slot-status">准备中</div>
+                </div>
             </div>
             
             <div class="waiting-players" id="waitingPlayerList" aria-live="polite"></div>
@@ -150,7 +164,7 @@
                 <div class="progress-bar">
                     <div class="progress-fill" id="progressFill"></div>
                 </div>
-                <p class="waiting-count" aria-live="polite"><span id="waitingCount">0</span> / 6 玩家</p>
+                <p class="waiting-count" aria-live="polite">当前 <span id="waitingCount">0</span> 人 · 最低 5 · 最多 8</p>
             </div>
             
             <div class="waiting-hint" id="waitingHint">
@@ -161,20 +175,22 @@
             <div class="waiting-tips" id="waitingTips" aria-live="polite">
                 <div class="tip-carousel">
                     <span class="tip active">💡 好游戏值得等待 ✨</span>
-                    <span class="tip">🎯 好人阵营需要完成3次任务获胜</span>
-                    <span class="tip">🕵️ 坏人阵营需要破坏3次任务获胜</span>
+                    <span class="tip">🎯 守护者阵营需要完成3次任务</span>
+                    <span class="tip">🕵️ 渗透者会混入小队诱导任务失败</span>
                     <span class="tip">🤖 每轮有概率出现AI附身干扰</span>
                 </div>
             </div>
             
             <div class="waiting-actions">
+                <button class="btn-sm start-game-btn" id="startGameBtn" onclick="requestStartGame()" disabled aria-label="开始本房间游戏">开始游戏</button>
                 <button class="btn-sm" id="copyBtn" onclick="copyRoomId()" aria-label="复制房间号">📋 复制房间号</button>
                 <button class="btn-sm" onclick="shareRoom()" aria-label="分享房间">🔗 分享房间</button>
             </div>
+            <p class="start-game-hint" id="startGameHint">首位玩家可在 5 人到齐后开始。</p>
             
             <div class="mode-display" id="modeDisplay">
                 <span class="mode-label">当前模式：</span>
-                <span class="mode-value" id="currentMode">测试模式</span>
+                <span class="mode-value" id="currentMode">正常模式</span>
             </div>
             
             <div class="waiting-fun">
@@ -202,7 +218,9 @@
                 <span id="timer" class="timer" aria-live="polite" aria-atomic="true">⏱ --</span>
             </div>
             <div class="top-right">
-                <span id="myRole" class="role-badge" aria-live="polite">🔧 工程师</span>
+                <button type="button" class="game-help-btn" onclick="showHelp()" aria-label="打开帮助">?</button>
+                <button type="button" class="game-help-btn" onclick="showTutorial()" aria-label="打开新手引导">规则</button>
+                <span id="myRole" class="role-badge" aria-live="polite">🛡️ 守护者</span>
             </div>
         </div>
 
@@ -229,21 +247,37 @@
                     <div id="proposedTeam" class="team-members" aria-live="polite"></div>
                 </div>
 
+                <!-- 讨论焦点 -->
+                <div class="discussion-focus" id="discussionFocus">
+                    <h3>🧭 讨论焦点</h3>
+                    <div id="discussionFocusList" class="discussion-focus-list" aria-live="polite">
+                        <div class="focus-item muted">等待本轮提名后生成追问点</div>
+                    </div>
+                </div>
+
                 <!-- 投票历史 -->
                 <div class="vote-history" id="voteHistory">
                     <h3>📊 投票历史</h3>
                     <div id="voteHistoryList" class="vote-history-list" aria-live="polite"></div>
                 </div>
 
-                <!-- 信号员提示 -->
+                <!-- 可疑事件 -->
+                <div class="suspicion-timeline" id="suspicionTimeline">
+                    <h3>🧩 可疑事件</h3>
+                    <div id="suspicionTimelineList" class="suspicion-timeline-list" aria-live="polite">
+                        <div class="suspicion-item muted">任务结果出现后记录可追问事件</div>
+                    </div>
+                </div>
+
+                <!-- 侦测者提示 -->
                 <div class="signal-alert hidden" id="signalAlert" role="alert" aria-live="assertive">
                     <span class="signal-icon">📡</span>
                     <span id="signalText">--</span>
                 </div>
                 
-                <!-- 信号员历史 -->
+                <!-- 侦测者历史 -->
                 <div class="signal-history hidden" id="signalHistory">
-                    <h3>📡 信号员历史</h3>
+                    <h3>📡 侦测者历史</h3>
                     <div id="signalHistoryList" class="signal-history-list" aria-live="polite"></div>
                 </div>
 
@@ -304,7 +338,7 @@
         </div>
 
         <!-- 底部操作栏 -->
-        <div class="action-bar" id="actionBar">
+        <div class="action-bar hidden" id="actionBar">
             <!-- 提名阶段：队长选人 -->
             <div id="proposeActions" class="action-group hidden">
                 <p class="action-hint" id="proposeHint">请选择 <span id="needCount">2</span> 名队友</p>
@@ -318,11 +352,11 @@
                 <button class="action-btn reject" onclick="submitTeamVote(false)">❌ 反对</button>
             </div>
 
-            <!-- 任务阶段：成功/破坏 -->
+            <!-- 任务阶段：行动选择 -->
             <div id="missionActions" class="action-group hidden">
-                <p class="action-hint">执行任务</p>
-                <button class="action-btn approve" onclick="submitMissionVote(true)">✅ 成功</button>
-                <button class="action-btn reject hidden" id="sabotageBtn" onclick="submitMissionVote(false)">🦠 破坏</button>
+                <p class="action-hint">请选择行动方案</p>
+                <button class="action-btn approve" onclick="submitMissionVote(true)">提交稳妥方案</button>
+                <button class="action-btn reject hidden" id="sabotageBtn" onclick="submitMissionVote(false)">提交高风险方案</button>
             </div>
         </div>
 
@@ -333,28 +367,9 @@
                 <button class="debug-toggle" onclick="toggleDebugPanel()">▼</button>
             </div>
             <div class="debug-content" id="debugContent">
-                <!-- 调试控制 -->
-                <div class="debug-section">
-                    <h4>🎮 游戏控制</h4>
-                    <div class="debug-controls">
-                        <button id="pauseBtn" class="debug-btn" onclick="togglePause()">⏸️ 暂停</button>
-                        <button class="debug-btn" onclick="skipPhase()">⏭️ 跳过阶段</button>
-                        <button class="debug-btn" onclick="jumpToPhase('vote')">🗳️ 跳到投票</button>
-                        <button class="debug-btn" onclick="jumpToPhase('mission')">🎯 跳到执行</button>
-                    </div>
-                </div>
-
-                <!-- 阶段跳转 -->
-                <div class="debug-section">
-                    <h4>🔄 阶段跳转</h4>
-                    <div class="phase-buttons">
-                        <button class="debug-btn small" onclick="jumpToPhase('propose')">提名</button>
-                        <button class="debug-btn small" onclick="jumpToPhase('discuss')">讨论</button>
-                        <button class="debug-btn small" onclick="jumpToPhase('vote')">投票</button>
-                        <button class="debug-btn small" onclick="jumpToPhase('mission')">执行</button>
-                        <button class="debug-btn small" onclick="jumpToPhase('reveal')">揭晓</button>
-                        <button class="debug-btn small" onclick="jumpToPhase('roundIntro')">轮次开始</button>
-                    </div>
+                <div class="debug-section debug-note">
+                    <h4>🎮 单人调试</h4>
+                    <p>演示模式会自动补齐玩家并推进流程，你可以观察投票、小队和任务结果如何影响阵营胜负。</p>
                 </div>
 
                 <!-- AI 状态 -->
@@ -435,7 +450,7 @@
                     <div id="reviewVoteHistory" class="review-list"></div>
                 </div>
                 <div class="review-section">
-                    <h4>信号员记录</h4>
+                    <h4>侦测者记录</h4>
                     <div id="reviewSignalHistory" class="review-list"></div>
                 </div>
                 <div class="review-section">
@@ -491,14 +506,15 @@
             <h2>❓ 帮助</h2>
             <div class="help-section">
                 <h3>🎮 游戏目标</h3>
-                <p>好人阵营需要完成3次任务，坏人阵营需要破坏3次任务。</p>
+                <p>守护者阵营需要完成3次任务；渗透者阵营需要让3次任务失败。</p>
+                <p>这不是答题游戏。执行阶段的选择用于暴露立场：守护者推动稳妥行动，渗透者会把高风险行动包装成合理选择。</p>
             </div>
             <div class="help-section">
                 <h3>👥 角色介绍</h3>
                 <ul>
-                    <li><strong>🔧 工程师</strong>：好人阵营，投票支持任务成功</li>
-                    <li><strong>🦠 渗透者</strong>：坏人阵营，投票破坏任务</li>
-                    <li><strong>📡 信号员</strong>：好人阵营，能检测AI附身</li>
+                    <li><strong>🛡️ 守护者</strong>：守护者阵营，识别可信小队并推动任务成功</li>
+                    <li><strong>🦠 渗透者</strong>：渗透者阵营，伪装推理并诱导任务失败</li>
+                    <li><strong>📡 侦测者</strong>：守护者阵营，能检测AI附身线索</li>
                 </ul>
             </div>
             <div class="help-section">
@@ -507,12 +523,12 @@
                     <li>队长提名小队成员</li>
                     <li>全员讨论（每人最多6条消息）</li>
                     <li>全员投票决定是否执行</li>
-                    <li>小队成员投票决定成功/破坏</li>
+                    <li>小队成员讨论危机场景并选择行动方案</li>
                 </ol>
             </div>
             <div class="help-section">
                 <h3>🤖 AI附身</h3>
-                <p>每轮有50%概率有人被AI附身，他们的消息会被改写。信号员能检测到附身。</p>
+                <p>每轮可能有人受到AI信号干扰，发言会被轻微改写。侦测者能获得本轮是否存在干扰的线索。</p>
             </div>
             <button class="help-close" onclick="hideHelp()">关闭</button>
         </div>

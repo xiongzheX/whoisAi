@@ -216,6 +216,59 @@
                 flex-direction: column;
             }
         }
+
+        /* Production pass: mission terminal manual */
+        body {
+            background:
+                radial-gradient(circle at 50% -10%, rgba(233, 69, 96, 0.22), transparent 34%),
+                linear-gradient(180deg, #121426, #080a14);
+            padding: 32px 18px;
+        }
+
+        .tutorial-container {
+            max-width: 1120px;
+            background: linear-gradient(180deg, rgba(15, 52, 96, 0.58), rgba(8, 12, 28, 0.9));
+            border: 1px solid rgba(80, 184, 255, 0.28);
+            border-radius: 8px;
+            box-shadow: 0 28px 80px rgba(0, 0, 0, 0.35);
+        }
+
+        .tutorial-header {
+            border-bottom: 1px solid rgba(80, 184, 255, 0.25);
+            padding-bottom: 28px;
+        }
+
+        .tutorial-header h1 {
+            color: #f1c40f;
+            text-shadow: 3px 3px 0 #000, 0 0 18px rgba(241, 196, 15, 0.25);
+        }
+
+        .tutorial-section {
+            border: 1px solid rgba(80, 184, 255, 0.25);
+            border-left: 6px solid #e94560;
+            border-radius: 8px;
+            background: rgba(8, 13, 30, 0.72);
+        }
+
+        .tutorial-section h2 {
+            color: #ff5d78;
+        }
+
+        .role-card,
+        .tip-box,
+        .warning-box {
+            border-radius: 6px;
+            background: rgba(10, 18, 40, 0.82);
+        }
+
+        .step-list li::before {
+            background: #f1c40f;
+            color: #1a1a2e;
+        }
+
+        .btn {
+            border-radius: 4px;
+        }
     </style>
 </head>
 <body>
@@ -228,11 +281,12 @@
         <!-- 游戏简介 -->
         <div class="tutorial-section">
             <h2>📖 游戏简介</h2>
-            <p>「谁是AI」是一款6人社交推理游戏，融合了经典阿瓦隆玩法和创新的AI附身机制。</p>
+            <p>「谁是AI」是一款5-8人社交推理游戏，融合了经典阿瓦隆玩法和AI信号干扰。</p>
+            <p>这不是答题游戏。执行阶段的选择用于暴露立场：守护者推动稳妥行动，渗透者会把高风险行动包装成合理选择。</p>
             <p>玩家分为两个阵营：</p>
             <ul>
-                <li><strong>🔧 工程师阵营（好人）：</strong>目标是完成3次系统维护任务</li>
-                <li><strong>🦠 渗透者阵营（坏人）：</strong>目标是破坏3次系统维护任务</li>
+                <li><strong>🛡️ 守护者阵营：</strong>目标是完成3次任务</li>
+                <li><strong>🦠 渗透者阵营：</strong>目标是诱导3次任务失败</li>
             </ul>
             <p>每轮游戏包含4个阶段：<strong>提名 → 讨论 → 投票 → 执行</strong></p>
         </div>
@@ -242,44 +296,44 @@
             <h2>👥 角色介绍</h2>
             
             <div class="role-card engineer">
-                <h3>🔧 工程师（好人阵营）</h3>
+                <h3>🛡️ 守护者（守护者阵营）</h3>
                 <p><strong>人数：</strong>3人（6人局）</p>
                 <p><strong>能力：</strong>无特殊能力，通过推理找出渗透者</p>
                 <p><strong>策略：</strong>观察发言风格，分析投票模式，找出可疑玩家</p>
             </div>
             
             <div class="role-card infiltrator">
-                <h3>🦠 渗透者（坏人阵营）</h3>
+                <h3>🦠 渗透者（渗透者阵营）</h3>
                 <p><strong>人数：</strong>1人</p>
-                <p><strong>能力：</strong>执行任务时可投"破坏"票</p>
-                <p><strong>策略：</strong>伪装成好人，投票时投"同意"，执行时投"破坏"</p>
+                <p><strong>能力：</strong>任务阶段可推动高风险行动，让任务失败</p>
+                <p><strong>策略：</strong>伪装成守护者，投票时支持可信小队，执行时诱导高风险方案</p>
             </div>
             
             <div class="role-card signal_keeper">
-                <h3>📡 信号员（好人阵营）</h3>
+                <h3>📡 侦测者（守护者阵营）</h3>
                 <p><strong>人数：</strong>1人</p>
                 <p><strong>能力：</strong>每轮知道"是否有人被附身"（但不知道是谁）</p>
                 <p><strong>策略：</strong>利用信息引导讨论，但不要过早暴露身份</p>
             </div>
             
             <div class="role-card observer">
-                <h3>👁️ 观察者（好人阵营）</h3>
+                <h3>👁️ 观察者（守护者阵营）</h3>
                 <p><strong>人数：</strong>1人</p>
-                <p><strong>能力：</strong>每轮可查看1名玩家的投票历史</p>
+                <p><strong>能力：</strong>当前版本没有额外主动按钮，重点分析公开投票和发言变化</p>
                 <p><strong>策略：</strong>分析投票模式，找出投票不一致的玩家</p>
             </div>
             
             <div class="role-card protector">
-                <h3>🛡️ 保护者（好人阵营）</h3>
+                <h3>🛡️ 护卫（守护者阵营）</h3>
                 <p><strong>人数：</strong>1人（7-8人局）</p>
-                <p><strong>能力：</strong>每轮可保护1名玩家不被AI附身</p>
-                <p><strong>策略：</strong>保护关键玩家，防止他们的消息被改写</p>
+                <p><strong>能力：</strong>扩展身份，当前版本没有额外主动按钮</p>
+                <p><strong>策略：</strong>用投票和发言保护你认为可信的玩家，避免关键轮次被误导</p>
             </div>
             
             <div class="role-card disruptor">
-                <h3>🎭 干扰者（坏人阵营）</h3>
+                <h3>🎭 伪装者（渗透者阵营）</h3>
                 <p><strong>人数：</strong>1人（8人局）</p>
-                <p><strong>能力：</strong>每轮可改变1名玩家的投票</p>
+                <p><strong>能力：</strong>扩展身份，当前版本通过发言、投票和任务行动制造误导</p>
                 <p><strong>策略：</strong>制造混乱，帮助渗透者获胜</p>
             </div>
         </div>
@@ -291,13 +345,13 @@
             <ol class="step-list">
                 <li>
                     <strong>提名阶段（15秒）</strong>
-                    <p>队长提名一个小队执行任务。小队人数根据轮次变化：[2, 3, 4, 3, 2]</p>
+                    <p>队长提名一个小队执行任务。小队人数根据轮次变化。</p>
                 </li>
                 
                 <li>
                     <strong>讨论阶段（45秒）</strong>
                     <p>所有玩家可以发言讨论。每人最多发送6条消息，每条最多50字。</p>
-                    <p><strong>注意：</strong>有50%概率某位玩家的消息会被AI改写！</p>
+                    <p><strong>注意：</strong>每轮可能出现AI信号干扰，被影响玩家的发言会显得更不稳定。</p>
                 </li>
                 
                 <li>
@@ -309,17 +363,17 @@
                 
                 <li>
                     <strong>执行阶段</strong>
-                    <p>小队成员投票"成功"或"破坏"。</p>
-                    <p>只要有一票"破坏"，任务就失败！</p>
-                    <p>全票"成功"，任务才成功。</p>
+                    <p>小队成员看到危机场景，并选择他们认为最稳妥的行动方案。</p>
+                    <p>守护者要推动稳妥方案；渗透者会伪装推理并诱导高风险方案。</p>
+                    <p>本轮选择结果会决定任务成功或失败。</p>
                 </li>
                 
                 <li>
                     <strong>结算阶段</strong>
                     <p>检查胜负条件：</p>
                     <ul>
-                        <li>好人阵营胜利：完成3次任务</li>
-                        <li>坏人阵营胜利：破坏3次任务</li>
+                        <li>守护者阵营胜利：完成3次任务</li>
+                        <li>渗透者阵营胜利：让3次任务失败</li>
                     </ul>
                 </li>
             </ol>
@@ -332,7 +386,7 @@
             <p>被附身的玩家：</p>
             <ul>
                 <li>会收到提示："⚠️ 你被AI信号干扰了！"</li>
-                <li>发送的消息会被AI改写（但你自己看到的是原消息）</li>
+                <li>发送的消息会被AI轻微改写</li>
                 <li>其他人看到的是改写后的消息</li>
             </ul>
             
@@ -342,7 +396,7 @@
                 <ul>
                     <li><strong>太礼貌：</strong>"我觉得不行" → "这个方案可能需要再考虑一下"</li>
                     <li><strong>太完整：</strong>"别选他" → "不建议选他，因为他的投票历史不够一致"</li>
-                    <li><strong>太中立：</strong>"他肯定是坏人" → "他的行为确实有些可疑"</li>
+                    <li><strong>太中立：</strong>"他肯定是渗透者" → "他的行为确实有些可疑"</li>
                     <li><strong>太正式：</strong>"笑死" → "这个确实很幽默"</li>
                 </ul>
             </div>
@@ -373,27 +427,27 @@
             <h2>🎯 策略建议</h2>
             
             <div class="tip-box">
-                <h4>🔧 工程师（好人）策略</h4>
+                <h4>🛡️ 守护者策略</h4>
                 <ul>
                     <li>观察发言风格，找出被附身的玩家</li>
                     <li>分析投票历史，找出投票不一致的玩家</li>
-                    <li>不要过早暴露信号员/观察者身份</li>
+                    <li>不要过早暴露侦测者/观察者身份</li>
                     <li>在关键轮次投反对票，阻止可疑小队</li>
                 </ul>
             </div>
             
             <div class="warning-box">
-                <h4>🦠 渗透者（坏人）策略</h4>
+                <h4>🦠 渗透者策略</h4>
                 <ul>
-                    <li>伪装成好人，投票时投"同意"</li>
-                    <li>在关键轮次投"破坏"票</li>
+                    <li>伪装成守护者，投票时投"同意"</li>
+                    <li>在关键轮次诱导小队选择高风险行动</li>
                     <li>发言时不要暴露身份</li>
                     <li>利用AI附身制造混乱</li>
                 </ul>
             </div>
             
             <div class="tip-box">
-                <h4>📡 信号员策略</h4>
+                <h4>📡 侦测者策略</h4>
                 <ul>
                     <li>利用"是否有人被附身"的信息引导讨论</li>
                     <li>不要过早暴露身份，否则会被针对</li>
@@ -411,7 +465,7 @@
             <p>A: 这是游戏设计，让每句话都重要，增加策略性。</p>
             
             <p><strong>Q: 如何知道谁被附身了？</strong></p>
-            <p>A: 观察发言风格异常的玩家，或者信号员会告诉你"是否有人被附身"。</p>
+            <p>A: 观察发言风格异常的玩家，或者侦测者会告诉你"是否有人被附身"。</p>
             
             <p><strong>Q: 投票历史在哪里看？</strong></p>
             <p>A: 在游戏界面的左侧面板，"📊 投票历史"部分。</p>

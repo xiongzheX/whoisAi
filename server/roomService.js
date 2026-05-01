@@ -54,7 +54,7 @@ function createRoom(roomId) {
     // v3: 投票历史
     voteHistory: [],          // [{ round, votes: { voterId: { name, approved } }, approved, team: [] }]
     
-    // v3: 信号员历史
+    // v3: 侦测者历史
     signalHistory: [],        // [{ round, hasPossession }]
 
     // v3: 题库

@@ -152,13 +152,13 @@ function createPhaseHandlers({ io }) {
         console.log(`房间 ${roomId} 第 ${room.currentRound} 轮：无人被附身`);
       }
 
-      // 通知信号员
+      // 通知侦测者
       const signalKeeper = alivePlayers.find(p => room.roles[p.id] === ROLES.SIGNAL_KEEPER);
       if (signalKeeper) {
         try {
           const hasPossession = !!room.possessedPlayer;
           
-          // 保存信号员历史
+          // 保存侦测者历史
           room.signalHistory.push({
             round: room.currentRound,
             hasPossession
@@ -170,7 +170,7 @@ function createPhaseHandlers({ io }) {
             signalHistory: room.signalHistory
           });
         } catch (err) {
-          console.error(`通知信号员失败:`, err);
+          console.error(`通知侦测者失败:`, err);
         }
       }
 
@@ -629,7 +629,7 @@ function createPhaseHandlers({ io }) {
     room.status = 'finished';
     if (room.currentPhaseTimer) clearTimeout(room.currentPhaseTimer);
 
-    const winnerFaction = winner; // 'engineer' (好人) or 'infiltrator' (坏人)
+    const winnerFaction = winner; // 'engineer' (守护者阵营，兼容旧 key) or 'infiltrator'
 
     // 构建角色揭示信息
     const rolesReveal = {};
@@ -647,11 +647,11 @@ function createPhaseHandlers({ io }) {
       }
     }
 
-    console.log(`房间 ${roomId} 游戏结束！${winnerFaction === 'engineer' ? '好人' : '坏人'}胜利`);
+    console.log(`房间 ${roomId} 游戏结束！${winnerFaction === 'engineer' ? '守护者' : '渗透者'}胜利`);
 
     io.to(roomId).emit('gameFinished', {
       winner: winnerFaction,
-      winnerLabel: winnerFaction === 'engineer' ? '🔧 工程师阵营胜利' : '🦠 渗透者胜利',
+      winnerLabel: winnerFaction === 'engineer' ? '🛡️ 守护者阵营胜利' : '🦠 渗透者胜利',
       roles: rolesReveal,
       missionResults: room.missionResults,
       missionSuccesses: room.missionSuccesses,

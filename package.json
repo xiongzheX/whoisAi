@@ -5,6 +5,8 @@
   "scripts": {
     "start": "node server/app.js",
     "server": "node server/server.js",
+    "go:server": "go run ./cmd/go-server",
+    "go:test": "GOCACHE=/tmp/whoisai-gocache go test ./...",
     "check": "node -c server/server.js && node -c client/js/stage.js && node -c client/js/game.js && node -c test-socket.js",
     "test:socket": "node test-socket.js",
     "test": "npm run check && npm run test:socket"

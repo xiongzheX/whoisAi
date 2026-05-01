@@ -3,7 +3,8 @@
  *
  * 事件接收：
  *   playerJoined, rolesRevealed, phaseChange, missionProposed,
- *   chat, teamVoteResult, missionResult, possessionAlert, signalCheck,
+ *   chat, teamVoteResult, missionPuzzle, missionSpectate, missionSubPhase,
+ *   puzzleChatBroadcast, missionReveal, missionResult, possessionAlert, signalCheck,
  *   gameFinished, roomReset, error
  *
  * 事件发送：
@@ -182,12 +183,12 @@ function startTutorial() {
     },
     {
       title: '游戏目标',
-      content: '好人阵营需要完成3次任务，坏人阵营需要破坏3次任务。',
+      content: '守护者阵营需要完成3次任务；渗透者阵营需要让3次任务失败。',
       target: null
     },
     {
       title: '角色介绍',
-      content: '工程师（好人）、渗透者（坏人）、信号员（好人，能检测AI附身）、观察者（好人，查看投票历史）、保护者（好人，防止附身）、干扰者（坏人，改变投票）。',
+      content: '守护者、侦测者、观察者、护卫属于守护者阵营；渗透者、伪装者属于渗透者阵营。AI附身会干扰发言可信度。',
       target: null
     },
     {
@@ -197,7 +198,7 @@ function startTutorial() {
     },
     {
       title: 'AI附身',
-      content: '每轮有50%概率有人被AI附身，他们的消息会被改写。信号员能检测到附身。观察发言风格异常的玩家。',
+      content: '每轮有50%概率有人被AI附身，他们的消息会被改写。侦测者能获得附身线索。观察发言风格异常的玩家。',
       target: null
     },
     {
@@ -207,7 +208,7 @@ function startTutorial() {
     },
     {
       title: '策略建议',
-      content: '工程师：观察发言风格，分析投票历史。渗透者：伪装成好人，投票时投"同意"，执行时投"破坏"。信号员：利用信息引导讨论，但不要过早暴露身份。',
+      content: '守护者：观察发言风格、投票历史和组队关系。渗透者：伪装可信玩家，诱导小队选择高风险行动。侦测者：利用信息引导讨论，但不要过早暴露身份。',
       target: null
     },
     {
@@ -262,7 +263,7 @@ let myId = null;
 let myName = '';
 let myRole = null;
 let currentRoomId = '';
-let gameMode = 'test';
+let gameMode = 'normal';
 let currentPhase = null;
 let messagesLeft = 4;   // 剩余消息数
 let maxMessages = 4;
@@ -274,7 +275,9 @@ let timerInterval = null;
 let timerValue = 0;
 let stage = null; // Canvas 小人舞台
 let voteHistory = []; // 投票历史
-let signalHistory = []; // 信号员历史
+let signalHistory = []; // 侦测者历史
+let suspicionTimeline = []; // 可疑事件时间线
+let discussionFocus = []; // 当前讨论焦点
 
 // 谜题状态（方向 C）
 let currentPuzzle = null;
@@ -288,6 +291,11 @@ let isPaused = false; // 游戏是否暂停
 let debugLogEntries = []; // 调试日志
 let aiPlayers = []; // AI玩家列表
 let gameRoom = null; // 游戏房间状态
+let pendingJoin = false;
+const generatedModeRooms = {};
+const MIN_PLAYERS = 5;
+const MAX_PLAYERS = 8;
+let waitingPlayers = [];
 
 // ═══════════════════════════════════════
 //  登录 & 加入
@@ -295,14 +303,20 @@ let gameRoom = null; // 游戏房间状态
 function setMode(mode) {
   gameMode = mode;
   document.querySelectorAll('.mode-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.mode === mode);
+    const selected = btn.dataset.mode === mode;
+    btn.classList.toggle('active', selected);
+    btn.setAttribute('aria-pressed', selected ? 'true' : 'false');
   });
+  updateModeDisplay(mode);
+  syncRoomInputForMode(mode);
+  updateStartGameButton(waitingPlayers);
 }
 
 function updateModeDisplay(mode) {
   const modeEl = document.getElementById('currentMode');
   if (modeEl) {
     const modeLabels = {
+      'normal': '正常模式',
       'test': '测试模式',
       'online': '联网模式',
       'solo': '单人调试'
@@ -310,6 +324,45 @@ function updateModeDisplay(mode) {
     const newText = modeLabels[mode] || mode;
     modeEl.textContent = newText;
   }
+}
+
+function syncRoomInputForMode(mode) {
+  const roomInput = document.getElementById('roomId');
+  if (!roomInput) return;
+
+  const current = roomInput.value.trim();
+  const isDefaultRoom = !current || current === 'room1' || Object.values(generatedModeRooms).includes(current);
+  if (mode === 'normal') {
+    if (isDefaultRoom) roomInput.value = 'room1';
+    return;
+  }
+
+  if (!generatedModeRooms[mode]) {
+    generatedModeRooms[mode] = `${mode}-${Math.random().toString(36).slice(2, 8)}`;
+  }
+  if (isDefaultRoom) roomInput.value = generatedModeRooms[mode];
+}
+
+function restoreJoinButton() {
+  const joinBtn = document.getElementById('joinBtn');
+  if (!joinBtn) return;
+  const btnText = joinBtn.querySelector('.btn-text');
+  const btnLoading = joinBtn.querySelector('.btn-loading');
+  if (btnText && btnLoading) {
+    btnText.classList.remove('hidden');
+    btnLoading.classList.add('hidden');
+  }
+  joinBtn.disabled = false;
+}
+
+function handleJoinRejected(message) {
+  pendingJoin = false;
+  restoreJoinButton();
+  stopWaitingTips();
+  if (!currentPhase && document.body.dataset.screen === 'waitingScreen') {
+    showScreen('loginScreen');
+  }
+  showError(message);
 }
 
 function backToHome() {
@@ -323,7 +376,7 @@ function backToHome() {
   myName = '';
   myRole = null;
   currentRoomId = '';
-  gameMode = 'test';
+  gameMode = 'normal';
   currentPhase = null;
   // 显示登录界面
   showScreen('loginScreen');
@@ -349,6 +402,7 @@ function joinGame() {
   }
   
   currentRoomId = roomInput.value.trim() || 'room1';
+  updateModeDisplay(gameMode);
 
   // 显示按钮加载状态
   const btnText = joinBtn.querySelector('.btn-text');
@@ -360,9 +414,11 @@ function joinGame() {
   }
 
   // 先显示等待界面
+  pendingJoin = true;
   showScreen('waitingScreen');
   const waitingRoomId = document.getElementById('waitingRoomId');
   if (waitingRoomId) waitingRoomId.textContent = currentRoomId;
+  updateModeDisplay(gameMode);
   
   // 开始等待提示
   startWaitingTips();
@@ -388,15 +444,15 @@ function joinGame() {
     showToast('❌ 连接失败，请检查网络');
     // 恢复按钮状态
     if (btnText && btnLoading) {
-      btnText.classList.remove('hidden');
-      btnLoading.classList.add('hidden');
-      joinBtn.disabled = false;
+      restoreJoinButton();
     }
   });
 }
 
 function copyRoomId() {
-  navigator.clipboard.writeText(currentRoomId).then(() => {
+  const shareUrl = buildRoomShareUrl(currentRoomId, gameMode || 'normal');
+  const copyText = `${currentRoomId}\n${shareUrl}`;
+  navigator.clipboard.writeText(copyText).then(() => {
     // 按钮反馈
     const btn = document.getElementById('copyBtn');
     if (btn) {
@@ -408,12 +464,48 @@ function copyRoomId() {
         btn.disabled = false;
       }, 2000);
     }
-    showToast('房间号已复制');
+    showToast('房间号和邀请链接已复制');
     // 添加复制成功动画
     copyRoomIdSuccess();
   }).catch(() => {
     showToast('复制失败，请手动复制');
   });
+}
+
+function buildRoomShareUrl(roomId, mode) {
+  const shareUrl = new URL(window.location.href);
+  shareUrl.searchParams.set('room', roomId);
+  shareUrl.searchParams.set('mode', mode);
+  shareUrl.hash = '';
+  return shareUrl.toString();
+}
+
+function requestStartGame() {
+  if (!socket || !currentRoomId) return;
+  const humanCount = waitingPlayers.filter(p => !p.isAI).length;
+  if (gameMode === 'normal' && humanCount < MIN_PLAYERS) {
+    showToast(`❌ 至少需要 ${MIN_PLAYERS} 名玩家才能开始`);
+    return;
+  }
+  socket.emit('startGame', { roomId: currentRoomId });
+}
+
+function applyInitialRoomParams() {
+  const params = new URLSearchParams(window.location.search);
+  const room = params.get('room');
+  const mode = params.get('mode');
+  const allowedModes = new Set(['normal', 'test', 'solo']);
+
+  if (mode && allowedModes.has(mode)) {
+    setMode(mode);
+  } else {
+    updateModeDisplay(gameMode);
+  }
+
+  if (room) {
+    const roomInput = document.getElementById('roomId');
+    if (roomInput) roomInput.value = room;
+  }
 }
 
 // ═══════════════════════════════════════
@@ -423,12 +515,17 @@ function registerEvents() {
 
   // 玩家加入/离开
   socket.on('playerJoined', ({ players, count, mode }) => {
+    pendingJoin = false;
+    restoreJoinButton();
+    waitingPlayers = players || [];
+    rememberPlayers(players);
     renderWaitingPlayers(players);
     // 更新模式显示
     if (mode) {
       gameMode = mode;
       updateModeDisplay(mode);
     }
+    updateStartGameButton(players);
     // 如果在游戏界面，更新玩家列表
     if (currentPhase) {
       renderGamePlayers(players);
@@ -437,8 +534,15 @@ function registerEvents() {
 
   // 角色揭示
   socket.on('rolesRevealed', ({ role, roleLabel, roleDescription, players }) => {
+    rememberPlayers(players);
     myRole = role;
     document.getElementById('myRole').textContent = roleLabel;
+    voteHistory = [];
+    signalHistory = [];
+    suspicionTimeline = [];
+    discussionFocus = [];
+    updateDiscussionFocus([]);
+    renderSuspicionTimeline();
     
     // 停止等待提示
     stopWaitingTips();
@@ -481,6 +585,8 @@ function registerEvents() {
 
   // 小队提名
   socket.on('missionProposed', ({ leaderId, leaderName, memberIds, memberNames }) => {
+    rememberPlayerNames(memberIds, memberNames);
+    if (leaderId && leaderName) playerNameById.set(leaderId, leaderName);
     document.getElementById('leaderName').textContent = leaderName;
     proposedTeamIds = memberIds;
     renderProposedTeam(memberNames);
@@ -493,11 +599,14 @@ function registerEvents() {
   });
 
   // 聊天消息
-  socket.on('chat', ({ playerId, playerName, message, messagesLeft: left, isPossessed }) => {
+  socket.on('chat', ({ playerId, playerName, message, messagesLeft: left, possessed, isPossessed }) => {
     addChatMessage(playerName, message, playerId === myId);
     if (playerId === myId) {
       messagesLeft = left;
       updateMsgCounter();
+      if (possessed || isPossessed) {
+        showToast('⚠️ 你的发言受到了AI信号干扰', 2500);
+      }
     }
 
     // 舞台：发言者弹跳
@@ -510,7 +619,7 @@ function registerEvents() {
   });
 
   // 小队投票结果
-  socket.on('teamVoteResult', ({ approved, approveCount, rejectCount, votes, voteHistory }) => {
+  socket.on('teamVoteResult', ({ approved, approveCount, rejectCount, votes, voteHistory: history }) => {
     const result = approved ? '小队通过 ✅' : '小队被否决 ❌';
     showToast(`${result} (${approveCount}:${rejectCount})`, 3000);
 
@@ -518,8 +627,8 @@ function registerEvents() {
     addChatMessage('系统', `投票结果: ${approveCount} 票同意, ${rejectCount} 票反对`, false, true);
     
     // 更新投票历史面板
-    if (voteHistory) {
-      window.voteHistory = voteHistory; // 更新全局变量
+    if (history) {
+      voteHistory = history;
       updateVoteHistory(voteHistory);
       
       // 为最新投票记录添加动画
@@ -540,8 +649,9 @@ function registerEvents() {
   });
 
   // 任务结果
-  socket.on('missionResult', ({ roundNumber, success, sabotageCount, missionResults, missionSuccesses, missionFailures }) => {
-    const result = success ? '任务成功 ✅' : `任务失败 ❌ (${sabotageCount} 票破坏)`;
+  socket.on('missionResult', ({ roundNumber, success, sabotageCount, riskActionCount, missionResults, missionSuccesses, missionFailures }) => {
+    const riskCount = typeof riskActionCount === 'number' ? riskActionCount : (sabotageCount || 0);
+    const result = success ? '任务成功 ✅' : `任务失败 ❌ (${riskCount} 次高风险行动)`;
     showToast(`第 ${roundNumber} 轮: ${result}`, 3000);
     addChatMessage('系统', `第 ${roundNumber} 轮任务${success ? '成功' : '失败'}`, false, true);
     
@@ -591,7 +701,7 @@ function registerEvents() {
     }
   });
 
-  // 信号员感知
+  // 侦测者感知
   socket.on('signalCheck', ({ hasPossession, roundNumber, signalHistory }) => {
     const alert = document.getElementById('signalAlert');
     alert.classList.remove('hidden');
@@ -599,7 +709,7 @@ function registerEvents() {
       ? `第 ${roundNumber} 轮：检测到异常信号 ⚠️`
       : `第 ${roundNumber} 轮：信号正常 ✅`;
     
-    // 更新信号员历史
+    // 更新侦测者历史
     if (signalHistory) {
       updateSignalHistory(signalHistory);
     }
@@ -611,6 +721,79 @@ function registerEvents() {
     if (canSabotage) {
       document.getElementById('sabotageBtn').classList.remove('hidden');
     }
+    updateActionBarVisibility();
+  });
+
+  socket.on('missionPuzzle', ({ puzzle, isPossessed, possessedHint, canSabotage, teamNames }) => {
+    currentPuzzle = puzzle;
+    isOnMissionTeam = true;
+    puzzleSubPhase = 'discuss';
+    showPuzzle(puzzle, { isPossessed, canSabotage });
+    enablePuzzleChat(2, 30);
+    addChatMessage('系统', `行动小队：${(teamNames || []).join('、')}。先讨论行动方案，稍后投票。`, false, true);
+    if (isPossessed && possessedHint) {
+      showToast(`⚠️ ${possessedHint}`, 5000);
+    }
+  });
+
+  socket.on('missionSpectate', ({ teamNames, puzzleTitle }) => {
+    isOnMissionTeam = false;
+    puzzleSubPhase = 'discuss';
+    showSpectate(teamNames || [], puzzleTitle);
+    disableChat('旁观小队行动，等待揭晓结果');
+  });
+
+  socket.on('missionSubPhase', ({ subPhase, timeLimit, maxMessages, maxChars }) => {
+    puzzleSubPhase = subPhase;
+    startTimer(timeLimit);
+    if (subPhase === 'discuss') {
+      if (isOnMissionTeam) {
+        enablePuzzleChat(maxMessages, maxChars);
+        showToast('行动讨论开始：说明你认为稳妥的方案', 2500);
+      } else {
+        disableChat('旁观小队行动讨论');
+      }
+      return;
+    }
+    if (subPhase === 'vote') {
+      disableChat(isOnMissionTeam ? '请选择行动方案' : '等待小队选择行动方案');
+      if (isOnMissionTeam) {
+        enablePuzzleVote();
+        showToast('请选择本轮行动方案', 2500);
+      }
+      return;
+    }
+    if (subPhase === 'reveal') {
+      disableChat('任务结果揭晓中');
+    }
+  });
+
+  socket.on('puzzleChatBroadcast', ({ playerId, playerName, message, messagesLeft: left }) => {
+    addChatMessage(playerName, message, playerId === myId);
+    if (playerId === myId && typeof left === 'number') {
+      puzzleMessagesLeft = left;
+      const input = document.getElementById('chatInput');
+      if (input && puzzleSubPhase === 'discuss') {
+        input.placeholder = `谜题讨论（${puzzleMessagesLeft}/${puzzleMaxMessages}）...`;
+      }
+    }
+  });
+
+  socket.on('missionReveal', ({
+    explanation, success, hadPossession, riskActionCount, sabotageCount, teamNames,
+    focusPrompts, suspicionEvents, missionResults, missionSuccesses, missionFailures
+  }) => {
+    puzzleSubPhase = 'reveal';
+    const riskCount = typeof riskActionCount === 'number' ? riskActionCount : (sabotageCount || 0);
+    showReveal({ explanation, success, hadPossession, riskActionCount: riskCount, teamNames: teamNames || [] });
+    updateDiscussionFocus(focusPrompts || []);
+    appendSuspicionEvents(suspicionEvents || []);
+    disableChat('任务结果揭晓中');
+    renderMissionDots(missionResults || []);
+    const successCountEl = document.getElementById('successCount');
+    const failCountEl = document.getElementById('failCount');
+    if (successCountEl && typeof missionSuccesses === 'number') successCountEl.textContent = missionSuccesses;
+    if (failCountEl && typeof missionFailures === 'number') failCountEl.textContent = missionFailures;
   });
 
   // 游戏结束
@@ -625,6 +808,10 @@ function registerEvents() {
 
   // 错误
   socket.on('error', (msg) => {
+    if (pendingJoin) {
+      handleJoinRejected(msg);
+      return;
+    }
     showError(msg);
   });
   
@@ -686,6 +873,11 @@ function handlePhaseChange(data) {
 
   // 隐藏所有操作按钮
   hideAllActions();
+  if (phase !== 'mission') {
+    hidePuzzleUI();
+    puzzleSubPhase = null;
+    isOnMissionTeam = false;
+  }
 
   // 显示新手引导提示
   showTutorialHint(phase);
@@ -713,6 +905,7 @@ function handlePhaseChange(data) {
       if (isLeader) {
         const proposeActions = document.getElementById('proposeActions');
         if (proposeActions) proposeActions.classList.remove('hidden');
+        updateActionBarVisibility();
         
         const proposeHint = document.getElementById('proposeHint');
         if (proposeHint) proposeHint.textContent = `请选择 ${teamSize} 名队友`;
@@ -749,6 +942,12 @@ function handlePhaseChange(data) {
       if (proposedTeamNames) {
         renderProposedTeam(proposedTeamNames);
       }
+      const nextFocus = buildDiscussFocus(proposedTeamNames || []);
+      if (discussionFocus.length > 0 && suspicionTimeline.length > 0) {
+        updateDiscussionFocus([...discussionFocus.slice(0, 2), ...nextFocus]);
+      } else {
+        updateDiscussionFocus(nextFocus);
+      }
 
       // 舞台：清除指向，所有人 idle
       if (stage) {
@@ -765,6 +964,7 @@ function handlePhaseChange(data) {
       
       const voteActions = document.getElementById('voteActions');
       if (voteActions) voteActions.classList.remove('hidden');
+      updateActionBarVisibility();
 
       // 舞台：所有人举手投票
       if (stage) {
@@ -949,16 +1149,18 @@ function submitTeamVote(approve) {
 function submitMissionVote(success) {
   socket.emit('missionVote', { roomId: currentRoomId, success });
   hideAllActions();
-  showToast(success ? '已投成功' : '已投破坏', 1500);
+  showToast(success ? '已提交稳妥方案' : '已提交高风险方案', 1500);
 }
 
 // ═══════════════════════════════════════
 //  渲染
 // ═══════════════════════════════════════
-// 更新信号员历史
+// 更新侦测者历史
 function updateSignalHistory(signalHistory) {
   const container = document.getElementById('signalHistoryList');
   if (!container) return;
+  const historyPanel = document.getElementById('signalHistory');
+  if (historyPanel) historyPanel.classList.remove('hidden');
   
   let html = '';
   signalHistory.forEach((record, index) => {
@@ -1011,7 +1213,7 @@ function updateVoteHistory(voteHistory) {
     // 创建团队信息
     const teamDiv = document.createElement('div');
     teamDiv.className = 'vote-team';
-    teamDiv.textContent = `提名: ${record.team.join(', ')}`;
+    teamDiv.textContent = `提名: ${formatTeamNames(record.team).join('、')}`;
     recordElement.appendChild(teamDiv);
     
     // 创建投票详情
@@ -1041,9 +1243,51 @@ function updateVoteHistory(voteHistory) {
   container.appendChild(fragment);
 }
 
+function buildDiscussFocus(teamNames = []) {
+  const teamText = teamNames.length > 0 ? teamNames.join('、') : '当前小队';
+  return [
+    `队长为什么选择 ${teamText}？`,
+    '谁在无理由支持或反对这支小队？',
+    '上一轮任务和投票记录里，谁的立场需要解释？'
+  ];
+}
+
+function updateDiscussionFocus(items = []) {
+  discussionFocus = items;
+  const container = document.getElementById('discussionFocusList');
+  if (!container) return;
+
+  if (items.length === 0) {
+    container.innerHTML = '<div class="focus-item muted">等待本轮提名后生成追问点</div>';
+    return;
+  }
+  container.innerHTML = items.map(item =>
+    `<div class="focus-item">${escapeHtml(item)}</div>`
+  ).join('');
+}
+
+function appendSuspicionEvents(items = []) {
+  if (!Array.isArray(items) || items.length === 0) return;
+  suspicionTimeline.push(...items);
+  renderSuspicionTimeline();
+}
+
+function renderSuspicionTimeline() {
+  const container = document.getElementById('suspicionTimelineList');
+  if (!container) return;
+
+  if (suspicionTimeline.length === 0) {
+    container.innerHTML = '<div class="suspicion-item muted">任务结果出现后记录可追问事件</div>';
+    return;
+  }
+  container.innerHTML = suspicionTimeline.slice(-8).map(item =>
+    `<div class="suspicion-item">${escapeHtml(item)}</div>`
+  ).join('');
+}
+
 // 角色图标映射
 const ROLE_ICONS = {
-  'engineer': '🔧',
+  'engineer': '🛡️',
   'infiltrator': '🦠',
   'signal_keeper': '📡'
 };
@@ -1054,7 +1298,7 @@ function showTutorialHint(phase) {
     'propose': '💡 提名阶段：队长需要选择队友执行任务。点击右侧玩家列表选择队友，然后点击"确认提名"。',
     'discuss': '💡 讨论阶段：所有玩家可以发言讨论。每人最多发送6条消息，每条最多50字。注意观察发言风格异常的玩家！',
     'team_vote': '💡 投票阶段：所有玩家投票"同意"或"反对"这个小队。投票历史会记录在左侧面板。',
-    'mission': '💡 执行阶段：小队成员投票"成功"或"破坏"。只要有一票"破坏"，任务就失败！'
+    'mission': '💡 执行阶段：小队成员讨论危机场景并选择行动方案；高风险选择会让任务失败。'
   };
   
   const hint = hints[phase];
@@ -1065,6 +1309,7 @@ function showTutorialHint(phase) {
 
 // 显示角色揭示动画
 function showRoleReveal(role, roleLabel, roleDescription, onComplete) {
+  const goalTip = getRoleGoalTip(role);
   // 创建遮罩层
   const overlay = document.createElement('div');
   overlay.className = 'role-reveal-overlay';
@@ -1073,6 +1318,7 @@ function showRoleReveal(role, roleLabel, roleDescription, onComplete) {
       <div class="role-reveal-icon ${`role-${role}`}">${ROLE_ICONS[role] || '❓'}</div>
       <div class="role-reveal-label">${roleLabel}</div>
       <div class="role-reveal-desc">${roleDescription}</div>
+      ${goalTip ? `<div class="role-reveal-next">${goalTip}</div>` : ''}
       <div class="role-reveal-hint">点击任意处继续</div>
     </div>
   `;
@@ -1094,6 +1340,18 @@ function showRoleReveal(role, roleLabel, roleDescription, onComplete) {
       overlay.click();
     }
   }, 5000);
+}
+
+function getRoleGoalTip(role) {
+  const tips = {
+    engineer: '首轮建议：先判断队长为什么选这些人，再观察谁把失败风险说得太轻。',
+    infiltrator: '首轮建议：先装作支持稳妥小队，在执行阶段把高风险行动包装成效率选择。',
+    signal_keeper: '首轮建议：结合信号提示和发言异常，不要只凭单条消息定罪。',
+    observer: '首轮建议：重点记录谁支持可疑小队、谁在关键投票摇摆。',
+    protector: '首轮建议：像守护者一样推理，用发言保护你认为可信的人。',
+    disruptor: '首轮建议：制造合理分歧，让守护者阵营难以形成稳定共识。'
+  };
+  return tips[role] || '';
 }
 
 // 等待提示文案
@@ -1140,12 +1398,13 @@ function initDOMCache() {
   domCache.waitingCount = document.getElementById('waitingCount');
   domCache.waitingText = document.getElementById('waitingText');
   
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < MAX_PLAYERS; i++) {
     domCache.slots[i] = document.getElementById(`slot${i}`);
   }
 }
 
-function renderWaitingPlayers(players) {
+function renderWaitingPlayers(players = []) {
+  waitingPlayers = players;
   // 使用缓存的 DOM 元素
   if (!domCache.waitingPlayerList) {
     initDOMCache();
@@ -1168,7 +1427,7 @@ function renderWaitingPlayers(players) {
   }
   
   // 更新进度条
-  updateWaitingProgress(players.length, 6);
+  updateWaitingProgress(players.length, MAX_PLAYERS);
   
   // 更新等待提示文案
   if (domCache.waitingText) {
@@ -1186,7 +1445,7 @@ function renderWaitingPlayers(players) {
   }
   
   // 更新玩家占位符
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < MAX_PLAYERS; i++) {
     const slot = domCache.slots[i];
     if (!slot) continue;
     
@@ -1212,10 +1471,49 @@ function renderWaitingPlayers(players) {
       `;
     }
   }
+  updateStartGameButton(players);
+}
+
+function updateStartGameButton(players = []) {
+  const btn = document.getElementById('startGameBtn');
+  const hint = document.getElementById('startGameHint');
+  if (!btn) return;
+
+  const humanCount = players.filter(p => !p.isAI).length;
+  const host = players[0];
+  const isHost = host && host.id === myId;
+
+  btn.classList.toggle('hidden', gameMode !== 'normal');
+  if (gameMode !== 'normal') {
+    btn.disabled = true;
+    btn.textContent = '自动开局中';
+    if (hint) hint.textContent = '测试模式和单人调试会自动补 AI 并开始。';
+    return;
+  }
+
+  if (!isHost) {
+    btn.disabled = true;
+    btn.textContent = '等待房主开始';
+    if (hint) hint.textContent = host ? `房主 ${host.name} 可在 5 人到齐后开始。` : '首位玩家可在 5 人到齐后开始。';
+    return;
+  }
+
+  if (humanCount < MIN_PLAYERS) {
+    const missing = MIN_PLAYERS - humanCount;
+    btn.disabled = true;
+    btn.textContent = `还差 ${missing} 人`;
+    if (hint) hint.textContent = `当前 ${humanCount} 人，至少 ${MIN_PLAYERS} 人才能开始；最多 ${MAX_PLAYERS} 人。`;
+    return;
+  }
+
+  btn.disabled = false;
+  btn.textContent = '开始游戏';
+  if (hint) hint.textContent = `人数已满足：当前 ${humanCount} 人，最多 ${MAX_PLAYERS} 人。`;
 }
 
 // 玩家列表缓存（用于事件委托）
 let cachedPlayers = [];
+const playerNameById = new Map();
 
 // 事件委托：点击玩家列表
 const playerListElement = document.getElementById('playerList');
@@ -1232,6 +1530,7 @@ if (playerListElement) {
 
 function renderGamePlayers(players) {
   cachedPlayers = players;
+  rememberPlayers(players);
   const container = document.getElementById('playerList');
   if (!container) return;
   
@@ -1350,7 +1649,7 @@ function handleGameFinished(winner, winnerLabel, roles, missionResults) {
   
   const resultMessage = document.getElementById('resultMessage');
   if (resultMessage) {
-    resultMessage.textContent = winner === 'engineer' ? '好人阵营成功完成了3次任务！' : '渗透者成功破坏了3次任务！';
+    resultMessage.textContent = winner === 'engineer' ? '守护者阵营完成了3次任务！' : '渗透者让3次任务失败！';
   }
 
   // 角色揭示
@@ -1409,7 +1708,7 @@ function fillGameReview() {
       const approveCount = record.approveCount || 0;
       const rejectCount = record.rejectCount || 0;
       html += `<div class="review-item">`;
-      html += `第${roundNum}轮 ${statusIcon} 提名: ${record.team.join(', ')}`;
+      html += `第${roundNum}轮 ${statusIcon} 提名: ${formatTeamNames(record.team).join('、')}`;
       html += `<br><small>投票结果: ${approveCount}票同意, ${rejectCount}票反对</small>`;
       html += `</div>`;
     });
@@ -1418,7 +1717,7 @@ function fillGameReview() {
     voteContainer.innerHTML = '<div class="review-item">无投票记录</div>';
   }
   
-  // 信号员记录
+  // 侦测者记录
   const signalContainer = document.getElementById('reviewSignalHistory');
   if (signalContainer && signalHistory && signalHistory.length > 0) {
     let html = '';
@@ -1468,6 +1767,7 @@ function showScreen(screenId) {
   document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
   const screen = document.getElementById(screenId);
   if (screen) screen.classList.remove('hidden');
+  document.body.dataset.screen = screenId;
 }
 
 function hideAllActions() {
@@ -1480,6 +1780,18 @@ function hideAllActions() {
   if (voteActions) voteActions.classList.add('hidden');
   if (missionActions) missionActions.classList.add('hidden');
   if (sabotageBtn) sabotageBtn.classList.add('hidden');
+  updateActionBarVisibility();
+}
+
+function updateActionBarVisibility() {
+  const actionBar = document.getElementById('actionBar');
+  if (!actionBar) return;
+
+  const hasVisibleAction = Array.from(actionBar.querySelectorAll('.action-group'))
+    .some(group => !group.classList.contains('hidden'));
+
+  actionBar.classList.toggle('hidden', !hasVisibleAction);
+  document.body.classList.toggle('has-action-bar', hasVisibleAction);
 }
 
 function showToast(msg, duration = 3000) {
@@ -1495,6 +1807,34 @@ function escapeHtml(str) {
   const div = document.createElement('div');
   div.textContent = str;
   return div.innerHTML;
+}
+
+function playerDisplayName(playerIdOrName) {
+  const player = cachedPlayers.find(p => p.id === playerIdOrName || p.name === playerIdOrName);
+  if (player) return player.name;
+  return playerNameById.get(playerIdOrName) || playerIdOrName;
+}
+
+function formatTeamNames(team = []) {
+  if (!Array.isArray(team)) return [];
+  return team.map(playerDisplayName);
+}
+
+function rememberPlayers(players = []) {
+  players.forEach(player => {
+    if (player && player.id && player.name) {
+      playerNameById.set(player.id, player.name);
+    }
+  });
+}
+
+function rememberPlayerNames(ids = [], names = []) {
+  ids.forEach((id, index) => {
+    const name = names[index];
+    if (id && name) {
+      playerNameById.set(id, name);
+    }
+  });
 }
 
 // ═══════════════════════════════════════
@@ -1517,7 +1857,8 @@ function hidePuzzleUI() {
 /**
  * 显示谜题（小队成员）
  */
-function showPuzzle(puzzle, canSabotage) {
+function showPuzzle(puzzle, context = {}) {
+  const { isPossessed = false, canSabotage = false } = context;
   hidePuzzleUI();
   const area = document.getElementById('puzzleArea');
   if (area) area.classList.remove('hidden');
@@ -1526,15 +1867,20 @@ function showPuzzle(puzzle, canSabotage) {
   const puzzleScenario = document.getElementById('puzzleScenario');
   if (puzzleTitle) puzzleTitle.textContent = puzzle.title;
   if (puzzleScenario) puzzleScenario.textContent = puzzle.scenario;
+  const possessedBadge = document.getElementById('puzzlePossessed');
+  if (possessedBadge) {
+    possessedBadge.style.display = (isPossessed || canSabotage) ? 'inline-flex' : 'none';
+    possessedBadge.textContent = isPossessed ? '信号干扰' : '渗透者可误导';
+  }
 
   // 填充选项文字
   const optA = document.getElementById('puzzleOptA');
   const optB = document.getElementById('puzzleOptB');
   const optC = document.getElementById('puzzleOptC');
 
-  if (optA) optA.textContent = `A: ${puzzle.options.A}`;
-  if (optB) optB.textContent = `B: ${puzzle.options.B}`;
-  if (optC) optC.textContent = `C: ${puzzle.options.C}`;
+  setPuzzleOption(optA, 'A', puzzle.options.A);
+  setPuzzleOption(optB, 'B', puzzle.options.B);
+  setPuzzleOption(optC, 'C', puzzle.options.C);
 
   // 重置状态
   [optA, optB, optC].forEach(btn => {
@@ -1547,6 +1893,15 @@ function showPuzzle(puzzle, canSabotage) {
   puzzleAnswer = null;
 }
 
+function setPuzzleOption(button, answer, label) {
+  if (!button) return;
+  button.dataset.answer = answer;
+  button.innerHTML = `
+    <span class="puzzle-letter">${answer}</span>
+    <span class="puzzle-option-text">${escapeHtml(label)}</span>
+  `;
+}
+
 /**
  * 启用谜题投票
  */
@@ -1554,6 +1909,7 @@ function enablePuzzleVote() {
   const opts = document.querySelectorAll('.puzzle-opt');
   opts.forEach(btn => {
     btn.disabled = false;
+    btn.removeEventListener('click', handlePuzzleOptionClick);
     btn.addEventListener('click', handlePuzzleOptionClick);
   });
 }
@@ -1570,7 +1926,7 @@ function handlePuzzleOptionClick(e) {
 
   // 自动提交
   socket.emit('missionVote', { roomId: currentRoomId, answer: puzzleAnswer });
-  showToast(`已选择 ${puzzleAnswer}`, 1500);
+  showToast('已提交行动方案', 1500);
 
   // 禁用所有选项
   document.querySelectorAll('.puzzle-opt').forEach(b => b.disabled = true);
@@ -1606,13 +1962,13 @@ function showSpectate(teamNames, puzzleTitle) {
   if (area) area.classList.remove('hidden');
 
   const spectateTeam = document.getElementById('spectateTeam');
-  if (spectateTeam) spectateTeam.textContent = `小队: ${teamNames.join('、')}`;
+  if (spectateTeam) spectateTeam.textContent = `小队: ${teamNames.join('、')}；题目: ${puzzleTitle || '危机行动选择'}`;
 }
 
 /**
  * 显示揭晓结果
  */
-function showReveal(correctAnswer, correctLabel, explanation, votes, justifications, success, hadPossession) {
+function showReveal({ explanation, success, hadPossession, riskActionCount = 0, teamNames = [] }) {
   hidePuzzleUI();
   const area = document.getElementById('revealArea');
   if (area) area.classList.remove('hidden');
@@ -1622,38 +1978,33 @@ function showReveal(correctAnswer, correctLabel, explanation, votes, justificati
   if (resultDiv) {
     const statusClass = success ? 'reveal-success' : 'reveal-fail';
     const statusIcon = success ? '✅' : '❌';
+    const riskSummary = success
+      ? '本轮没有出现高风险行动，任务成功。'
+      : `本轮出现 ${riskActionCount} 次高风险行动，任务失败。`;
+    const teamText = teamNames.length > 0 ? teamNames.join('、') : '本轮行动小队';
     resultDiv.innerHTML = `
       <h3 class="${statusClass}">${statusIcon} 任务${success ? '成功' : '失败'}</h3>
-      <p class="explanation">正确答案: ${correctAnswer} (${escapeHtml(correctLabel)}) — ${escapeHtml(explanation)}</p>
+      <p class="explanation">${riskSummary}</p>
+      <p class="explanation">嫌疑范围：${escapeHtml(teamText)}</p>
+      <p class="explanation">行动复盘：${escapeHtml(explanation || '')}</p>
+      <p class="explanation">${hadPossession ? '本轮发生过 AI 信号干扰。' : '本轮没有检测到 AI 信号干扰。'}</p>
     `;
   }
 
-  // 每人投票详情
+  // 半隐藏任务：不公开个人行动，只公开整体结果和嫌疑范围
   const detailDiv = document.getElementById('revealDetail');
   if (detailDiv) {
-    let html = '';
-    for (const [playerId, vote] of Object.entries(votes)) {
-      const just = justifications[playerId];
-      const isCorrect = vote.answer === correctAnswer;
-      const ansClass = isCorrect ? 'correct-ans' : 'wrong-ans';
-      const ansIcon = isCorrect ? '✓' : '✗';
-      html += `
-        <div class="reveal-vote-item">
-          <span class="vote-name">${escapeHtml(vote.name)}</span>
-          <span class="vote-answer ${ansClass}">${vote.answer} ${ansIcon}</span>
-          <span class="vote-justification">${just ? escapeHtml(just.lastMessage) : ''}</span>
-        </div>
-      `;
-    }
-    detailDiv.innerHTML = html;
+    detailDiv.innerHTML = `
+      <div class="reveal-hidden-note">
+        个人行动保持隐藏。下一轮请围绕队长提名、小队成员、支持票和 AI 干扰线索追问。
+      </div>
+    `;
   }
 
-  // 高亮谜题区选项（如果还显示的话）
+  // 半隐藏任务不回显个人答案，避免过早暴露身份
   document.querySelectorAll('.puzzle-opt').forEach(btn => {
     btn.disabled = true;
-    const ans = btn.dataset.answer;
-    if (ans === correctAnswer) btn.classList.add('correct');
-    else if (votes[myId] && votes[myId].answer === ans) btn.classList.add('wrong');
+    btn.classList.remove('correct', 'wrong');
   });
 }
 
@@ -1683,6 +2034,9 @@ function showDebugPanel() {
   const panel = document.getElementById('debugPanel');
   if (panel) {
     panel.classList.remove('hidden');
+    panel.classList.add('collapsed');
+    const toggle = document.querySelector('.debug-toggle');
+    if (toggle) toggle.textContent = '▲';
     addDebugLog('调试面板已显示', 'info');
   }
 }
@@ -1922,13 +2276,14 @@ setInterval(() => {
  */
 function shareRoom() {
   const roomId = document.getElementById('waitingRoomId').textContent;
-  const shareText = `来玩「谁是AI」吧！房间号：${roomId}`;
+  const shareUrl = buildRoomShareUrl(roomId, gameMode || 'normal');
+  const shareText = `来玩「谁是AI」吧！房间号：${roomId}\n${shareUrl}`;
   
   if (navigator.share) {
     navigator.share({
       title: '谁是AI - 阿瓦隆式社交推理游戏',
       text: shareText,
-      url: window.location.href
+      url: shareUrl
     }).catch(console.error);
   } else {
     // 复制到剪贴板
@@ -2169,12 +2524,13 @@ function updateVoteHistoryWithAnimation(voteRecord) {
   
   const recordElement = document.createElement('div');
   recordElement.className = `vote-record ${voteRecord.approved ? 'approved' : 'rejected'}`;
+  const teamNames = formatTeamNames(Array.isArray(voteRecord.team) ? voteRecord.team : [voteRecord.team]).join('、');
   recordElement.innerHTML = `
     <div class="vote-record-header">
       <span class="vote-round">第${voteRecord.round}轮</span>
       <span class="vote-status">${voteRecord.approved ? '✅' : '❌'}</span>
     </div>
-    <div class="vote-team">队伍: ${voteRecord.team}</div>
+    <div class="vote-team">队伍: ${escapeHtml(teamNames)}</div>
     <div class="vote-details">
       ${voteRecord.votes.map(v => `<span class="vote-player">${v.player}: ${v.vote ? '✅' : '❌'}</span>`).join('')}
     </div>
@@ -2185,7 +2541,7 @@ function updateVoteHistoryWithAnimation(voteRecord) {
 }
 
 /**
- * 更新信号员历史显示
+ * 更新侦测者历史显示
  */
 function updateSignalHistoryWithAnimation(signalRecord) {
   const signalHistoryList = document.getElementById('signalHistoryList');
@@ -2207,8 +2563,8 @@ function updateSignalHistoryWithAnimation(signalRecord) {
 function showFunFact() {
   const funFacts = [
     '在这个游戏中，AI玩家会模仿人类行为，让你难以分辨真假！',
-    '信号员的能力可以检测AI附身，但附身者可能不会被检测到！',
-    '好人阵营需要完成3次任务才能获胜，而坏人需要破坏3次！',
+    '侦测者的能力可以检测AI附身，但附身者可能不会被直接定位！',
+    '守护者阵营需要完成3次任务，渗透者需要诱导3次任务失败。',
     '每轮游戏有50%的概率出现AI附身干扰！',
     '游戏中的AI玩家会根据你的行为调整策略！'
   ];
@@ -2223,6 +2579,8 @@ function showFunFact() {
  * 初始化UI优化
  */
 function initUIOptimizations() {
+  applyInitialRoomParams();
+
   // 启动提示轮播
   startTipCarousel();
   
