@@ -5,6 +5,22 @@
 
 ---
 
+## 📸 界面截图
+
+### 登录页
+
+![登录页](screenshots/01-login.png)
+
+### 对局页
+
+![对局页](screenshots/02-gameplay.png)
+
+### 结算页
+
+![结算页](screenshots/03-result.png)
+
+---
+
 ## 🎮 游戏规则
 
 ### 角色（推荐6人）
