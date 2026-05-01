@@ -80,7 +80,7 @@
 ## 🚀 快速开始
 
 ```bash
-# 安装依赖
+# 安装依赖（前端 Socket.IO client 资源）
 npm install
 
 # 启动 Go 服务
@@ -100,6 +100,10 @@ GOCACHE=/tmp/whoisai-gocache PORT=3014 go run ./cmd/go-server
 
 ### 当前实现状态
 
+- 当前仓库只保留 Go 后端：
+  - `cmd/go-server`
+  - `internal/game`
+  - `internal/realtime`
 - Go 服务已支持：
   - 房间模式锁定
   - AI 干扰消息改写
@@ -117,17 +121,17 @@ GOCACHE=/tmp/whoisai-gocache PORT=3014 go run ./cmd/go-server
 
 ```
 whoisAi/
-├── server/
-│   ├── server.js
-│   ├── gameFlow.js
-│   ├── missionHandlers.js
-│   ├── roomService.js
-│   └── state/
+├── cmd/
+│   └── go-server/
+├── internal/
+│   ├── game/
+│   └── realtime/
 ├── client/
 │   ├── index.html
 │   ├── js/game.js
 │   └── css/style-v3.css
-└── package.json
+├── package.json
+└── go.mod
 ```
 
 ---

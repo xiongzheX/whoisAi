@@ -1,7 +1,0 @@
-{
-  "name": "who-is-ai-test",
-  "version": "1.0.0",
-  "dependencies": {
-    "socket.io-client": "^4.6.1"
-  }
-}
