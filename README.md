@@ -106,6 +106,12 @@ GOCACHE=/tmp/whoisai-gocache PORT=3014 go run ./cmd/go-server
 # http://localhost:3014
 ```
 
+### 环境变量
+
+- 当前 `.env.example` 只用于说明 Go 后端实际读取的 `PORT`
+- 你可以复制 `.env.example` 为 `.env`，也可以直接在启动命令前注入环境变量
+- 默认示例端口是 `3014`
+
 ### 游戏模式
 
 | 模式 | 人数 | 说明 |
