@@ -273,6 +273,8 @@ let teamSizeNeeded = 2;
 let isLeader = false;
 let timerInterval = null;
 let timerValue = 0;
+let toastTimer = null;
+let lastToastMeta = { key: '', shownAt: 0 };
 let stage = null; // Canvas 小人舞台
 let voteHistory = []; // 投票历史
 let signalHistory = []; // 侦测者历史
@@ -292,6 +294,7 @@ let debugLogEntries = []; // 调试日志
 let aiPlayers = []; // AI玩家列表
 let gameRoom = null; // 游戏房间状态
 let pendingJoin = false;
+let possessionToastMutedUntil = 0;
 const generatedModeRooms = {};
 const MIN_PLAYERS = 5;
 const MAX_PLAYERS = 8;
@@ -441,7 +444,7 @@ function joinGame() {
   
   socket.on('connect_error', (error) => {
     console.error('连接错误:', error);
-    showToast('❌ 连接失败，请检查网络');
+    showToast('❌ 连接失败，请检查网络', 3000, { key: 'connect_error', dedupeMs: 1500 });
     // 恢复按钮状态
     if (btnText && btnLoading) {
       restoreJoinButton();
@@ -604,8 +607,8 @@ function registerEvents() {
     if (playerId === myId) {
       messagesLeft = left;
       updateMsgCounter();
-      if (possessed || isPossessed) {
-        showToast('⚠️ 你的发言受到了AI信号干扰', 2500);
+      if ((possessed || isPossessed) && Date.now() >= possessionToastMutedUntil) {
+        showToast('⚠️ 你的发言受到了AI信号干扰', 2500, { key: 'possessed_chat', dedupeMs: 2000 });
       }
     }
 
@@ -693,7 +696,8 @@ function registerEvents() {
   // 附身警告（只发给被附身者）
   socket.on('possessionAlert', () => {
     document.getElementById('possessionWarning').classList.remove('hidden');
-    showToast('⚠️ 你被 AI 信号干扰了！你的消息可能会被改写', 5000);
+    possessionToastMutedUntil = Date.now() + 6000;
+    showToast('⚠️ 你被 AI 信号干扰了！你的消息可能会被改写', 5000, { key: 'possession_alert', dedupeMs: 3000 });
 
     // 舞台：被附身者闪烁
     if (stage) {
@@ -815,19 +819,14 @@ function registerEvents() {
     showError(msg);
   });
   
-  // 连接错误
-  socket.on('connect_error', (error) => {
-    console.error('连接错误:', error);
-    handleNetworkError();
-  });
-  
   // 断开连接
   socket.on('disconnect', (reason) => {
     console.log('断开连接:', reason);
     if (reason === 'io server disconnect') {
       showError('服务器断开连接，请刷新页面重试');
     } else {
-      showToast('连接已断开，正在重新连接...', 3000);
+      showToast('连接已断开，正在重新连接...', 3000, { key: 'disconnect_reconnect', dedupeMs: 2000 });
+      handleNetworkError();
     }
   });
   
@@ -1794,13 +1793,27 @@ function updateActionBarVisibility() {
   document.body.classList.toggle('has-action-bar', hasVisibleAction);
 }
 
-function showToast(msg, duration = 3000) {
+function showToast(msg, duration = 3000, options = {}) {
   const toast = document.getElementById('toast');
-  if (toast) {
-    toast.textContent = msg;
-    toast.classList.remove('hidden');
-    setTimeout(() => toast.classList.add('hidden'), duration);
+  if (!toast) return;
+
+  const key = options.key || msg;
+  const dedupeMs = options.dedupeMs || 0;
+  const now = Date.now();
+  if (dedupeMs > 0 && lastToastMeta.key === key && now - lastToastMeta.shownAt < dedupeMs) {
+    return;
   }
+
+  lastToastMeta = { key, shownAt: now };
+  toast.textContent = msg;
+  toast.classList.remove('hidden');
+  if (toastTimer) {
+    clearTimeout(toastTimer);
+  }
+  toastTimer = setTimeout(() => {
+    toast.classList.add('hidden');
+    toastTimer = null;
+  }, duration);
 }
 
 function escapeHtml(str) {

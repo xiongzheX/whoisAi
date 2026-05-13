@@ -10,18 +10,30 @@ import (
 
 	siosocket "github.com/zishang520/socket.io/socket"
 
+	"whoisai/internal/ai"
+	"whoisai/internal/envfile"
 	"whoisai/internal/game"
 	"whoisai/internal/realtime"
 )
 
 func main() {
+	if err := envfile.Load(".env"); err != nil {
+		log.Printf("failed to load .env: %v", err)
+	}
+
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "3001"
+		port = "3014"
 	}
 
 	store := game.NewStore()
-	service := game.NewService(store)
+	aiConfig := ai.LoadConfigFromEnv()
+	if aiConfig.Enabled() {
+		log.Printf("AI rewrite enabled via %s", aiConfig.BaseURL)
+	} else {
+		log.Printf("AI rewrite disabled, using local fallback")
+	}
+	service := game.NewService(store, game.WithMessageRewriter(ai.NewClient(aiConfig, log.Default())))
 	io := siosocket.NewServer(nil, nil)
 	realtime.New(io, store, service).Register()
 

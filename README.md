@@ -99,7 +99,7 @@
 # 安装依赖（前端 Socket.IO client 资源）
 npm install
 
-# 启动 Go 服务
+# 启动 Go 服务（未配置 AI_* 时自动走本地兜底）
 GOCACHE=/tmp/whoisai-gocache PORT=3014 go run ./cmd/go-server
 
 # 打开浏览器
@@ -108,9 +108,23 @@ GOCACHE=/tmp/whoisai-gocache PORT=3014 go run ./cmd/go-server
 
 ### 环境变量
 
-- 当前 `.env.example` 只用于说明 Go 后端实际读取的 `PORT`
-- 你可以复制 `.env.example` 为 `.env`，也可以直接在启动命令前注入环境变量
-- 默认示例端口是 `3014`
+- `PORT`：Go 服务监听端口，默认 `3014`
+- `AI_API_KEY` / `AI_BASE_URL` / `AI_MODEL`：OpenAI 兼容接口配置，三者都存在时启用外部 AI 改写
+- `AI_TIMEOUT_MS`：外部 AI 请求超时，默认 `8000`
+- 服务启动时会自动加载项目根目录 `.env`
+- 命令行里已显式传入的环境变量优先，不会被 `.env` 覆盖
+- 任一 `AI_*` 缺失，或外部请求失败/超时/响应异常时，会自动回退到本地规则改写
+
+示例：
+
+```bash
+AI_API_KEY=sk-xxx \
+AI_BASE_URL=https://api.openai.com/v1 \
+AI_MODEL=gpt-4o-mini \
+PORT=3014 \
+GOCACHE=/tmp/whoisai-gocache \
+go run ./cmd/go-server
+```
 
 ### 游戏模式
 
@@ -129,6 +143,7 @@ GOCACHE=/tmp/whoisai-gocache PORT=3014 go run ./cmd/go-server
 - Go 服务已支持：
   - 房间模式锁定
   - AI 干扰消息改写
+  - OpenAI 兼容 API 改写 + 本地 fallback
   - 侦测者线索事件
   - 半隐藏任务揭晓
   - 讨论焦点 / 可疑事件面板

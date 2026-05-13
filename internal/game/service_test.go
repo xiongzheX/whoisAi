@@ -1,6 +1,26 @@
 package game
 
-import "testing"
+import (
+	"errors"
+	"testing"
+)
+
+var errTestRewrite = errors.New("rewrite failed")
+
+type stubMessageRewriter struct {
+	rewritten string
+	err       error
+	calls     int
+	message   string
+	style     Style
+}
+
+func (s *stubMessageRewriter) Rewrite(message string, style Style) (string, error) {
+	s.calls++
+	s.message = message
+	s.style = style
+	return s.rewritten, s.err
+}
 
 func TestServiceStartGameAssignsRolesAndBeginsProposePhase(t *testing.T) {
 	t.Parallel()
@@ -83,6 +103,93 @@ func TestServiceChatRewritesPossessedPlayerAndUsesPlayerName(t *testing.T) {
 	}
 	if left != MaxMessagesPerRound-1 {
 		t.Fatalf("messages left = %d, want %d", left, MaxMessagesPerRound-1)
+	}
+}
+
+func TestServiceChatUsesExternalRewriterWhenAvailable(t *testing.T) {
+	t.Parallel()
+
+	store := NewStore()
+	rewriter := &stubMessageRewriter{rewritten: "外部改写结果"}
+	service := NewService(store, WithMessageRewriter(rewriter))
+	store.CreateRoom("room1")
+	for _, player := range []struct {
+		id   string
+		name string
+	}{
+		{id: "p1", name: "玩家一"},
+		{id: "p2", name: "玩家二"},
+		{id: "p3", name: "玩家三"},
+		{id: "p4", name: "玩家四"},
+		{id: "p5", name: "玩家五"},
+	} {
+		if _, err := store.AddPlayer("room1", player.id, player.name, ModeNormal); err != nil {
+			t.Fatalf("AddPlayer returned error: %v", err)
+		}
+	}
+	if _, _, err := service.StartGame("room1", "p1"); err != nil {
+		t.Fatalf("StartGame returned error: %v", err)
+	}
+
+	store.mu.Lock()
+	store.rooms["room1"].PossessedPlayer = "p1"
+	store.rooms["room1"].PossessionStyle = StyleAwkward
+	store.mu.Unlock()
+
+	message, _, err := service.Chat("room1", "p1", "我觉得不行")
+	if err != nil {
+		t.Fatalf("Chat returned error: %v", err)
+	}
+	if got := message.Displayed; got != "外部改写结果" {
+		t.Fatalf("Displayed = %q, want external rewritten message", got)
+	}
+	if rewriter.calls != 1 {
+		t.Fatalf("Rewrite calls = %d, want 1", rewriter.calls)
+	}
+	if rewriter.message != "我觉得不行" || rewriter.style != StyleAwkward {
+		t.Fatalf("rewriter received (%q, %q), want original message and style", rewriter.message, rewriter.style)
+	}
+}
+
+func TestServiceChatFallsBackWhenExternalRewriterFails(t *testing.T) {
+	t.Parallel()
+
+	store := NewStore()
+	rewriter := &stubMessageRewriter{err: errTestRewrite}
+	service := NewService(store, WithMessageRewriter(rewriter))
+	store.CreateRoom("room1")
+	for _, player := range []struct {
+		id   string
+		name string
+	}{
+		{id: "p1", name: "玩家一"},
+		{id: "p2", name: "玩家二"},
+		{id: "p3", name: "玩家三"},
+		{id: "p4", name: "玩家四"},
+		{id: "p5", name: "玩家五"},
+	} {
+		if _, err := store.AddPlayer("room1", player.id, player.name, ModeNormal); err != nil {
+			t.Fatalf("AddPlayer returned error: %v", err)
+		}
+	}
+	if _, _, err := service.StartGame("room1", "p1"); err != nil {
+		t.Fatalf("StartGame returned error: %v", err)
+	}
+
+	store.mu.Lock()
+	store.rooms["room1"].PossessedPlayer = "p1"
+	store.rooms["room1"].PossessionStyle = StylePolite
+	store.mu.Unlock()
+
+	message, _, err := service.Chat("room1", "p1", "我觉得不行")
+	if err != nil {
+		t.Fatalf("Chat returned error: %v", err)
+	}
+	if got := message.Displayed; got != "可能我觉得不行" {
+		t.Fatalf("Displayed = %q, want local fallback rewrite", got)
+	}
+	if rewriter.calls != 1 {
+		t.Fatalf("Rewrite calls = %d, want 1", rewriter.calls)
 	}
 }
 

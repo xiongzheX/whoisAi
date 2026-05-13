@@ -15,11 +15,21 @@ type Event struct {
 }
 
 type Service struct {
-	store *Store
+	store           *Store
+	messageRewriter MessageRewriter
 }
 
-func NewService(store *Store) *Service {
-	return &Service{store: store}
+func NewService(store *Store, options ...ServiceOption) *Service {
+	service := &Service{
+		store:           store,
+		messageRewriter: localMessageRewriter{},
+	}
+	for _, option := range options {
+		if option != nil {
+			option(service)
+		}
+	}
+	return service
 }
 
 func MissionTeamSize(playerCount, roundNumber int) int {
@@ -153,7 +163,7 @@ func (s *Service) Chat(roomID, playerID, input string) (ChatMessage, int, error)
 	displayed := message
 	possessed := playerID == room.PossessedPlayer
 	if possessed {
-		displayed = RewriteMessage(message, room.PossessionStyle)
+		displayed = s.rewritePossessedMessage(message, room.PossessionStyle)
 	}
 	room.MessageCount[playerID]++
 	chatMessage := ChatMessage{
@@ -165,6 +175,17 @@ func (s *Service) Chat(roomID, playerID, input string) (ChatMessage, int, error)
 	}
 	room.ChatMessages = append(room.ChatMessages, chatMessage)
 	return chatMessage, MaxMessagesPerRound - room.MessageCount[playerID], nil
+}
+
+func (s *Service) rewritePossessedMessage(message string, style Style) string {
+	if s.messageRewriter == nil {
+		return RewriteMessage(message, style)
+	}
+	rewritten, err := s.messageRewriter.Rewrite(message, style)
+	if err != nil || strings.TrimSpace(rewritten) == "" {
+		return RewriteMessage(message, style)
+	}
+	return rewritten
 }
 
 func (s *Service) ProposeMission(roomID, proposerID string, memberIDs []string) (*Room, []Event, error) {
