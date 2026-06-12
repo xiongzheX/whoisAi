@@ -268,11 +268,14 @@ func TestServiceTeamVoteApprovalStartsMission(t *testing.T) {
 	if puzzlePayload == nil {
 		t.Fatalf("events = %+v, want missionPuzzle payload", events)
 	}
-	if puzzlePayload["title"] != "危机行动选择" {
-		t.Fatalf("puzzle title = %v, want 危机行动选择", puzzlePayload["title"])
+	if puzzlePayload["title"] == "" {
+		t.Fatalf("puzzle title = %v, want task title", puzzlePayload["title"])
 	}
 	if containsAny(puzzlePayload["scenario"].(string), "服务器", "日志", "修复") {
 		t.Fatalf("puzzle scenario = %q, should avoid engineering knowledge", puzzlePayload["scenario"])
+	}
+	if _, ok := puzzlePayload["options"]; ok {
+		t.Fatalf("puzzle payload exposed options: %+v", puzzlePayload)
 	}
 }
 
@@ -446,7 +449,7 @@ func TestServiceTestModeAssignsAIRolesAndAISabotagesWhenInfiltrator(t *testing.T
 	store.rooms["room1"].ProposedTeam = append([]string(nil), state.ProposedTeam...)
 	store.mu.Unlock()
 
-	state, events, err := service.MissionVote("room1", "human", "A")
+	state, events, err := service.MissionVote("room1", "human", MissionActionSupport)
 	if err != nil {
 		t.Fatalf("MissionVote returned error: %v", err)
 	}
@@ -527,7 +530,7 @@ func TestServiceMissionVoteSuccessAdvancesRound(t *testing.T) {
 
 	var events []Event
 	for _, id := range team {
-		state, events, err = service.MissionVote("room1", id, "A")
+		state, events, err = service.MissionVote("room1", id, MissionActionSupport)
 		if err != nil {
 			t.Fatalf("MissionVote returned error: %v", err)
 		}
@@ -544,6 +547,93 @@ func TestServiceMissionVoteSuccessAdvancesRound(t *testing.T) {
 	resultPayload := events[1].Payload.(map[string]any)
 	if resultPayload["roundNumber"] != 1 {
 		t.Fatalf("roundNumber = %v, want 1", resultPayload["roundNumber"])
+	}
+}
+
+func TestServiceMissionVoteIgnoresSabotageFromGoodPlayer(t *testing.T) {
+	t.Parallel()
+
+	store := NewStore()
+	service := NewService(store)
+	store.CreateRoom("room1")
+	players := []string{"p1", "p2", "p3", "p4", "p5"}
+	for _, id := range players {
+		if _, err := store.AddPlayer("room1", id, id, ModeNormal); err != nil {
+			t.Fatalf("AddPlayer returned error: %v", err)
+		}
+	}
+	state, _, err := service.StartGame("room1", "p1")
+	if err != nil {
+		t.Fatalf("StartGame returned error: %v", err)
+	}
+	team := players[:2]
+	store.mu.Lock()
+	room := store.rooms["room1"]
+	room.CurrentPhase = PhaseMission
+	room.ProposedTeam = append([]string(nil), team...)
+	room.MissionVotes = map[string]string{}
+	room.CurrentLeader = state.CurrentLeader
+	for _, id := range team {
+		room.Roles[id] = RoleEngineer
+	}
+	store.mu.Unlock()
+
+	var events []Event
+	for _, id := range team {
+		state, events, err = service.MissionVote("room1", id, MissionActionSabotage)
+		if err != nil {
+			t.Fatalf("MissionVote(%q, sabotage) returned error: %v", id, err)
+		}
+	}
+	if len(state.MissionResults) != 1 || !state.MissionResults[0] {
+		t.Fatalf("mission results = %+v, want success because good players cannot sabotage", state.MissionResults)
+	}
+	resultPayload := events[1].Payload.(map[string]any)
+	if got := resultPayload["riskActionCount"]; got != 0 {
+		t.Fatalf("riskActionCount = %v, want 0", got)
+	}
+}
+
+func TestServiceMissionVoteFailsWhenInfiltratorSabotages(t *testing.T) {
+	t.Parallel()
+
+	store := NewStore()
+	service := NewService(store)
+	store.CreateRoom("room1")
+	players := []string{"p1", "p2", "p3", "p4", "p5"}
+	for _, id := range players {
+		if _, err := store.AddPlayer("room1", id, id, ModeNormal); err != nil {
+			t.Fatalf("AddPlayer returned error: %v", err)
+		}
+	}
+	state, _, err := service.StartGame("room1", "p1")
+	if err != nil {
+		t.Fatalf("StartGame returned error: %v", err)
+	}
+	team := players[:2]
+	store.mu.Lock()
+	room := store.rooms["room1"]
+	room.CurrentPhase = PhaseMission
+	room.ProposedTeam = append([]string(nil), team...)
+	room.MissionVotes = map[string]string{}
+	room.CurrentLeader = state.CurrentLeader
+	room.Roles[team[0]] = RoleEngineer
+	room.Roles[team[1]] = RoleInfiltrator
+	store.mu.Unlock()
+
+	if _, _, err = service.MissionVote("room1", team[0], MissionActionSupport); err != nil {
+		t.Fatalf("MissionVote(%q, support) returned error: %v", team[0], err)
+	}
+	state, events, err := service.MissionVote("room1", team[1], MissionActionSabotage)
+	if err != nil {
+		t.Fatalf("MissionVote(%q, sabotage) returned error: %v", team[1], err)
+	}
+	if len(state.MissionResults) != 1 || state.MissionResults[0] {
+		t.Fatalf("mission results = %+v, want failure when infiltrator sabotages", state.MissionResults)
+	}
+	resultPayload := events[1].Payload.(map[string]any)
+	if got := resultPayload["sabotageCount"]; got != 1 {
+		t.Fatalf("sabotageCount = %v, want 1", got)
 	}
 }
 
@@ -581,7 +671,7 @@ func TestServiceGameFinishedIncludesRoleRevealPayload(t *testing.T) {
 
 	var events []Event
 	for _, id := range team {
-		_, events, err = service.MissionVote("room1", id, "A")
+		_, events, err = service.MissionVote("room1", id, MissionActionSupport)
 		if err != nil {
 			t.Fatalf("MissionVote returned error: %v", err)
 		}

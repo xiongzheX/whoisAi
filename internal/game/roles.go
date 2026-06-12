@@ -35,9 +35,9 @@ func AssignRoles(playerIDs []string) map[string]Role {
 func RoleDescription(role Role) string {
 	switch role {
 	case RoleEngineer:
-		return "你属于守护者阵营。目标是推动 3 次任务成功；首轮优先支持可信小队，观察谁在替高风险行动找理由。"
+		return "你属于守护者阵营。目标是推动 3 次任务成功；首轮优先支持可信小队，观察谁在任务失败后解释最牵强。"
 	case RoleInfiltrator:
-		return "你是潜伏在队伍中的渗透者。目标是诱导 3 次任务失败；伪装成守护者，在讨论和执行阶段包装高风险行动。"
+		return "你是潜伏在队伍中的渗透者。目标是诱导 3 次任务失败；混入小队后可以秘密破坏，并把嫌疑转移给别人。"
 	case RoleSignalKeeper:
 		return "你是侦测者。每轮开始时能感知是否有人被 AI 干扰；用线索引导讨论，但别太早暴露身份。"
 	case RoleObserver:

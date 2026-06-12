@@ -188,7 +188,7 @@ function startTutorial() {
     },
     {
       title: '角色介绍',
-      content: '守护者、侦测者、观察者、护卫属于守护者阵营；渗透者、伪装者属于渗透者阵营。AI附身会干扰发言可信度。',
+      content: '基础局包含守护者、侦测者和渗透者。守护者阵营推动任务成功，渗透者阵营伪装并诱导任务失败。',
       target: null
     },
     {
@@ -208,7 +208,7 @@ function startTutorial() {
     },
     {
       title: '策略建议',
-      content: '守护者：观察发言风格、投票历史和组队关系。渗透者：伪装可信玩家，诱导小队选择高风险行动。侦测者：利用信息引导讨论，但不要过早暴露身份。',
+      content: '守护者：观察发言风格、投票历史和组队关系。渗透者：伪装可信玩家，在任务阶段秘密破坏并转移嫌疑。侦测者：利用信息引导讨论，但不要过早暴露身份。',
       target: null
     },
     {
@@ -281,11 +281,12 @@ let signalHistory = []; // 侦测者历史
 let suspicionTimeline = []; // 可疑事件时间线
 let discussionFocus = []; // 当前讨论焦点
 
-// 谜题状态（方向 C）
+// 任务行动状态
 let currentPuzzle = null;
-let puzzleAnswer = null;
+let missionAction = null;
 let puzzleSubPhase = null;  // 'discuss' | 'vote' | 'reveal'
 let isOnMissionTeam = false; // 当前玩家是否在小队中
+let currentCanSabotage = false;
 
 // 调试模式状态
 let debugMode = false; // 是否启用调试模式
@@ -654,7 +655,7 @@ function registerEvents() {
   // 任务结果
   socket.on('missionResult', ({ roundNumber, success, sabotageCount, riskActionCount, missionResults, missionSuccesses, missionFailures }) => {
     const riskCount = typeof riskActionCount === 'number' ? riskActionCount : (sabotageCount || 0);
-    const result = success ? '任务成功 ✅' : `任务失败 ❌ (${riskCount} 次高风险行动)`;
+    const result = success ? '任务成功 ✅' : `任务失败 ❌ (${riskCount} 次破坏)`;
     showToast(`第 ${roundNumber} 轮: ${result}`, 3000);
     addChatMessage('系统', `第 ${roundNumber} 轮任务${success ? '成功' : '失败'}`, false, true);
     
@@ -731,10 +732,11 @@ function registerEvents() {
   socket.on('missionPuzzle', ({ puzzle, isPossessed, possessedHint, canSabotage, teamNames }) => {
     currentPuzzle = puzzle;
     isOnMissionTeam = true;
+    currentCanSabotage = !!canSabotage;
     puzzleSubPhase = 'discuss';
     showPuzzle(puzzle, { isPossessed, canSabotage });
     enablePuzzleChat(2, 30);
-    addChatMessage('系统', `行动小队：${(teamNames || []).join('、')}。先讨论行动方案，稍后投票。`, false, true);
+    addChatMessage('系统', `行动小队：${(teamNames || []).join('、')}。先讨论这支队伍是否可信，随后秘密行动。`, false, true);
     if (isPossessed && possessedHint) {
       showToast(`⚠️ ${possessedHint}`, 5000);
     }
@@ -753,17 +755,17 @@ function registerEvents() {
     if (subPhase === 'discuss') {
       if (isOnMissionTeam) {
         enablePuzzleChat(maxMessages, maxChars);
-        showToast('行动讨论开始：说明你认为稳妥的方案', 2500);
+        showToast('行动讨论开始：说明你为什么信任或怀疑这支小队', 2500);
       } else {
         disableChat('旁观小队行动讨论');
       }
       return;
     }
     if (subPhase === 'vote') {
-      disableChat(isOnMissionTeam ? '请选择行动方案' : '等待小队选择行动方案');
+      disableChat(isOnMissionTeam ? '请选择秘密行动' : '等待小队秘密行动');
       if (isOnMissionTeam) {
         enablePuzzleVote();
-        showToast('请选择本轮行动方案', 2500);
+        showToast('请选择本轮秘密行动', 2500);
       }
       return;
     }
@@ -778,7 +780,7 @@ function registerEvents() {
       puzzleMessagesLeft = left;
       const input = document.getElementById('chatInput');
       if (input && puzzleSubPhase === 'discuss') {
-        input.placeholder = `谜题讨论（${puzzleMessagesLeft}/${puzzleMaxMessages}）...`;
+        input.placeholder = `任务讨论（${puzzleMessagesLeft}/${puzzleMaxMessages}）...`;
       }
     }
   });
@@ -853,6 +855,7 @@ function handlePhaseChange(data) {
     maxMessages: mm, maxChars: mc, timeLimit } = data;
 
   currentPhase = phase;
+  document.body.dataset.phase = phase;
   
   const roundInfo = document.getElementById('roundInfo');
   if (roundInfo) roundInfo.textContent = `第 ${roundNumber}/${totalRounds} 轮`;
@@ -985,7 +988,7 @@ function handlePhaseChange(data) {
         }
       }
 
-      // 方向 C：谜题 UI 由 missionPuzzle/missionSpectate 事件处理
+      // 任务行动 UI 由 missionPuzzle/missionSpectate 事件处理
       // 这里只做初始化隐藏
       hidePuzzleUI();
       break;
@@ -1031,16 +1034,16 @@ function sendChat() {
   const msg = input.value.trim();
   if (!msg) return;
 
-  // 谜题讨论阶段 → 走 puzzleChat
+  // 任务讨论阶段 → 走 puzzleChat
   if (currentPhase === 'mission' && puzzleSubPhase === 'discuss' && isOnMissionTeam) {
     if (puzzleMessagesLeft <= 0) {
-      showToast('谜题讨论消息已用完', 2000);
+      showToast('任务讨论消息已用完', 2000);
       return;
     }
     socket.emit('puzzleChat', { roomId: currentRoomId, message: msg });
     puzzleMessagesLeft--;
     input.value = '';
-    input.placeholder = `谜题讨论（${puzzleMessagesLeft}/${puzzleMaxMessages}）...`;
+    input.placeholder = `任务讨论（${puzzleMessagesLeft}/${puzzleMaxMessages}）...`;
     if (puzzleMessagesLeft <= 0) {
       input.disabled = true;
       const btn = document.getElementById('chatSendBtn');
@@ -1146,9 +1149,12 @@ function submitTeamVote(approve) {
 }
 
 function submitMissionVote(success) {
-  socket.emit('missionVote', { roomId: currentRoomId, success });
+  socket.emit('missionVote', {
+    roomId: currentRoomId,
+    action: success ? 'support' : 'sabotage',
+  });
   hideAllActions();
-  showToast(success ? '已提交稳妥方案' : '已提交高风险方案', 1500);
+  showToast(success ? '已秘密执行任务' : '已秘密破坏任务', 1500);
 }
 
 // ═══════════════════════════════════════
@@ -1297,7 +1303,7 @@ function showTutorialHint(phase) {
     'propose': '💡 提名阶段：队长需要选择队友执行任务。点击右侧玩家列表选择队友，然后点击"确认提名"。',
     'discuss': '💡 讨论阶段：所有玩家可以发言讨论。每人最多发送6条消息，每条最多50字。注意观察发言风格异常的玩家！',
     'team_vote': '💡 投票阶段：所有玩家投票"同意"或"反对"这个小队。投票历史会记录在左侧面板。',
-    'mission': '💡 执行阶段：小队成员讨论危机场景并选择行动方案；高风险选择会让任务失败。'
+    'mission': '💡 执行阶段：小队成员会秘密执行任务；渗透者可以选择破坏，具体行动者不会公开。'
   };
   
   const hint = hints[phase];
@@ -1309,6 +1315,7 @@ function showTutorialHint(phase) {
 // 显示角色揭示动画
 function showRoleReveal(role, roleLabel, roleDescription, onComplete) {
   const goalTip = getRoleGoalTip(role);
+  let completed = false;
   // 创建遮罩层
   const overlay = document.createElement('div');
   overlay.className = 'role-reveal-overlay';
@@ -1318,7 +1325,8 @@ function showRoleReveal(role, roleLabel, roleDescription, onComplete) {
       <div class="role-reveal-label">${roleLabel}</div>
       <div class="role-reveal-desc">${roleDescription}</div>
       ${goalTip ? `<div class="role-reveal-next">${goalTip}</div>` : ''}
-      <div class="role-reveal-hint">点击任意处继续</div>
+      <button type="button" class="role-reveal-enter">进入本局</button>
+      <div class="role-reveal-hint">也可以点击背景继续</div>
     </div>
   `;
   
@@ -1326,6 +1334,8 @@ function showRoleReveal(role, roleLabel, roleDescription, onComplete) {
   
   // 点击继续
   overlay.addEventListener('click', () => {
+    if (completed) return;
+    completed = true;
     overlay.style.animation = 'fadeOut 0.3s ease forwards';
     setTimeout(() => {
       overlay.remove();
@@ -1344,7 +1354,7 @@ function showRoleReveal(role, roleLabel, roleDescription, onComplete) {
 function getRoleGoalTip(role) {
   const tips = {
     engineer: '首轮建议：先判断队长为什么选这些人，再观察谁把失败风险说得太轻。',
-    infiltrator: '首轮建议：先装作支持稳妥小队，在执行阶段把高风险行动包装成效率选择。',
+    infiltrator: '首轮建议：先装作支持可信小队，必要时在任务阶段秘密破坏并把嫌疑引向他人。',
     signal_keeper: '首轮建议：结合信号提示和发言异常，不要只凭单条消息定罪。',
     observer: '首轮建议：重点记录谁支持可疑小队、谁在关键投票摇摆。',
     protector: '首轮建议：像守护者一样推理，用发言保护你认为可信的人。',
@@ -1851,11 +1861,11 @@ function rememberPlayerNames(ids = [], names = []) {
 }
 
 // ═══════════════════════════════════════
-//  方向 C：谜题 UI 函数
+//  任务行动 UI 函数
 // ═══════════════════════════════════════
 
 /**
- * 隐藏所有谜题相关 UI
+ * 隐藏所有任务相关 UI
  */
 function hidePuzzleUI() {
   const puzzleArea = document.getElementById('puzzleArea');
@@ -1868,10 +1878,11 @@ function hidePuzzleUI() {
 }
 
 /**
- * 显示谜题（小队成员）
+ * 显示任务行动面板（小队成员）
  */
 function showPuzzle(puzzle, context = {}) {
   const { isPossessed = false, canSabotage = false } = context;
+  currentCanSabotage = !!canSabotage;
   hidePuzzleUI();
   const area = document.getElementById('puzzleArea');
   if (area) area.classList.remove('hidden');
@@ -1883,47 +1894,38 @@ function showPuzzle(puzzle, context = {}) {
   const possessedBadge = document.getElementById('puzzlePossessed');
   if (possessedBadge) {
     possessedBadge.style.display = (isPossessed || canSabotage) ? 'inline-flex' : 'none';
-    possessedBadge.textContent = isPossessed ? '信号干扰' : '渗透者可误导';
+    possessedBadge.textContent = isPossessed ? '信号干扰' : '可秘密破坏';
   }
 
-  // 填充选项文字
-  const optA = document.getElementById('puzzleOptA');
-  const optB = document.getElementById('puzzleOptB');
-  const optC = document.getElementById('puzzleOptC');
+  const supportBtn = document.getElementById('missionSupportBtn');
+  const sabotageBtn = document.getElementById('missionSabotageBtn');
 
-  setPuzzleOption(optA, 'A', puzzle.options.A);
-  setPuzzleOption(optB, 'B', puzzle.options.B);
-  setPuzzleOption(optC, 'C', puzzle.options.C);
-
-  // 重置状态
-  [optA, optB, optC].forEach(btn => {
+  [supportBtn, sabotageBtn].forEach(btn => {
     if (btn) {
       btn.classList.remove('selected', 'correct', 'wrong');
-      btn.disabled = true; // 讨论阶段不可点击
+      btn.disabled = true;
     }
   });
+  if (sabotageBtn) {
+    sabotageBtn.classList.toggle('hidden', !canSabotage);
+  }
 
-  puzzleAnswer = null;
-}
-
-function setPuzzleOption(button, answer, label) {
-  if (!button) return;
-  button.dataset.answer = answer;
-  button.innerHTML = `
-    <span class="puzzle-letter">${answer}</span>
-    <span class="puzzle-option-text">${escapeHtml(label)}</span>
-  `;
+  missionAction = null;
 }
 
 /**
- * 启用谜题投票
+ * 启用秘密行动
  */
 function enablePuzzleVote() {
   const opts = document.querySelectorAll('.puzzle-opt');
   opts.forEach(btn => {
-    btn.disabled = false;
+    const action = btn.dataset.action;
+    const canUse = action === 'support' || (action === 'sabotage' && currentCanSabotage);
+    btn.disabled = !canUse;
     btn.removeEventListener('click', handlePuzzleOptionClick);
-    btn.addEventListener('click', handlePuzzleOptionClick);
+    if (canUse) {
+      btn.addEventListener('click', handlePuzzleOptionClick);
+    }
   });
 }
 
@@ -1935,18 +1937,18 @@ function handlePuzzleOptionClick(e) {
   // 高亮选中
   document.querySelectorAll('.puzzle-opt').forEach(b => b.classList.remove('selected'));
   btn.classList.add('selected');
-  puzzleAnswer = btn.dataset.answer;
+  missionAction = btn.dataset.action || 'support';
 
   // 自动提交
-  socket.emit('missionVote', { roomId: currentRoomId, answer: puzzleAnswer });
-  showToast('已提交行动方案', 1500);
+  socket.emit('missionVote', { roomId: currentRoomId, action: missionAction });
+  showToast(missionAction === 'sabotage' ? '已秘密破坏任务' : '已秘密执行任务', 1500);
 
   // 禁用所有选项
   document.querySelectorAll('.puzzle-opt').forEach(b => b.disabled = true);
 }
 
 /**
- * 启用谜题讨论聊天
+ * 启用任务讨论聊天
  */
 let puzzleMessagesLeft = 0;
 let puzzleMaxMessages = 2;
@@ -1960,7 +1962,7 @@ function enablePuzzleChat(maxMessages, maxChars) {
   if (input) {
     input.disabled = false;
     input.maxLength = maxChars || 30;
-    input.placeholder = `谜题讨论（${puzzleMessagesLeft}/${puzzleMaxMessages}）...`;
+    input.placeholder = `任务讨论（${puzzleMessagesLeft}/${puzzleMaxMessages}）...`;
     input.focus();
   }
   if (btn) btn.disabled = false;
@@ -1975,7 +1977,7 @@ function showSpectate(teamNames, puzzleTitle) {
   if (area) area.classList.remove('hidden');
 
   const spectateTeam = document.getElementById('spectateTeam');
-  if (spectateTeam) spectateTeam.textContent = `小队: ${teamNames.join('、')}；题目: ${puzzleTitle || '危机行动选择'}`;
+  if (spectateTeam) spectateTeam.textContent = `小队: ${teamNames.join('、')}；任务: ${puzzleTitle || '秘密任务'}`;
 }
 
 /**
@@ -1992,8 +1994,8 @@ function showReveal({ explanation, success, hadPossession, riskActionCount = 0, 
     const statusClass = success ? 'reveal-success' : 'reveal-fail';
     const statusIcon = success ? '✅' : '❌';
     const riskSummary = success
-      ? '本轮没有出现高风险行动，任务成功。'
-      : `本轮出现 ${riskActionCount} 次高风险行动，任务失败。`;
+      ? '本轮没有出现破坏，任务成功。'
+      : `本轮出现 ${riskActionCount} 次破坏，任务失败。`;
     const teamText = teamNames.length > 0 ? teamNames.join('、') : '本轮行动小队';
     resultDiv.innerHTML = `
       <h3 class="${statusClass}">${statusIcon} 任务${success ? '成功' : '失败'}</h3>

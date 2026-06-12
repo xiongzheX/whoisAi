@@ -274,7 +274,7 @@ func (s *Service) TeamVote(roomID, voterID string, approve bool) (*Room, []Event
 	if room.Mode == ModeTest || room.Mode == ModeSolo {
 		for _, player := range room.Players {
 			if player.IsAI && !player.Eliminated {
-				room.TeamVotes[player.ID] = true
+				room.TeamVotes[player.ID] = aiTeamVote(room, player.ID)
 			}
 		}
 	}
@@ -367,7 +367,12 @@ func (s *Service) StartTeamVote(roomID string) (*Room, []Event, error) {
 	return cloneRoom(room), []Event{event}, nil
 }
 
-func (s *Service) MissionVote(roomID, voterID, answer string) (*Room, []Event, error) {
+const (
+	MissionActionSupport  = "support"
+	MissionActionSabotage = "sabotage"
+)
+
+func (s *Service) MissionVote(roomID, voterID, action string) (*Room, []Event, error) {
 	s.store.mu.Lock()
 	defer s.store.mu.Unlock()
 
@@ -381,14 +386,11 @@ func (s *Service) MissionVote(roomID, voterID, answer string) (*Room, []Event, e
 	if !contains(room.ProposedTeam, voterID) {
 		return nil, nil, errors.New("只有小队成员可以执行任务")
 	}
-	if answer == "" {
-		answer = "A"
-	}
-	room.MissionVotes[voterID] = answer
+	room.MissionVotes[voterID] = normalizeMissionAction(room, voterID, action)
 	if room.Mode == ModeTest || room.Mode == ModeSolo {
 		for _, playerID := range room.ProposedTeam {
 			if isAIPlayer(room, playerID) {
-				room.MissionVotes[playerID] = aiMissionAnswer(room, playerID)
+				room.MissionVotes[playerID] = aiMissionAction(room, playerID)
 			}
 		}
 	}
@@ -398,7 +400,7 @@ func (s *Service) MissionVote(roomID, voterID, answer string) (*Room, []Event, e
 
 	success := true
 	for _, vote := range room.MissionVotes {
-		if vote != "A" {
+		if vote == MissionActionSabotage {
 			success = false
 			break
 		}
@@ -410,22 +412,23 @@ func (s *Service) MissionVote(roomID, voterID, answer string) (*Room, []Event, e
 		room.MissionFailures++
 	}
 
-	riskActionCount := wrongCount(room.MissionVotes)
+	scenario := MissionScenarioForRound(room.CurrentRound)
+	sabotageCount := countSabotage(room.MissionVotes)
 	teamNames := playerNames(room, room.ProposedTeam)
-	focusPrompts := missionFocusPrompts(room, success, riskActionCount)
-	suspicionEvents := missionSuspicionEvents(room, success, riskActionCount)
+	focusPrompts := missionFocusPrompts(room, success, sabotageCount)
+	suspicionEvents := missionSuspicionEvents(room, success, sabotageCount)
 
 	events := []Event{{
 		Name:   "missionReveal",
 		RoomID: roomID,
 		Payload: map[string]any{
 			"roundNumber":      room.CurrentRound,
-			"explanation":      "先控制异常区域并确认风险来源，是当前最稳妥的行动方案。",
+			"explanation":      scenario.Explanation,
 			"team":             room.ProposedTeam,
 			"teamNames":        teamNames,
 			"success":          success,
-			"riskActionCount":  riskActionCount,
-			"sabotageCount":    riskActionCount,
+			"riskActionCount":  sabotageCount,
+			"sabotageCount":    sabotageCount,
 			"focusPrompts":     focusPrompts,
 			"suspicionEvents":  suspicionEvents,
 			"missionResults":   room.MissionResults,
@@ -442,10 +445,11 @@ func (s *Service) MissionVote(roomID, voterID, answer string) (*Room, []Event, e
 			"missionResults":   room.MissionResults,
 			"missionSuccesses": room.MissionSuccesses,
 			"missionFailures":  room.MissionFailures,
-			"explanation":      "先控制异常区域并确认风险来源，是当前最稳妥的行动方案。",
+			"explanation":      scenario.Explanation,
 			"team":             room.ProposedTeam,
 			"teamNames":        teamNames,
-			"riskActionCount":  riskActionCount,
+			"riskActionCount":  sabotageCount,
+			"sabotageCount":    sabotageCount,
 			"focusPrompts":     focusPrompts,
 			"suspicionEvents":  suspicionEvents,
 			"hadPossession":    room.PossessedPlayer != "",
@@ -596,11 +600,36 @@ func isAIPlayer(room *Room, playerID string) bool {
 	return false
 }
 
-func aiMissionAnswer(room *Room, playerID string) string {
-	if roleFaction(room.Roles[playerID]) == "evil" {
-		return "B"
+func aiTeamVote(room *Room, playerID string) bool {
+	role := room.Roles[playerID]
+	if roleFaction(role) == "evil" {
+		return proposedTeamHasFaction(room, "evil") || room.CurrentRound == 1
 	}
-	return "A"
+	if len(room.MissionResults) == 0 || room.MissionResults[len(room.MissionResults)-1] {
+		return true
+	}
+	if len(room.VoteHistory) == 0 {
+		return true
+	}
+	lastTeam := room.VoteHistory[len(room.VoteHistory)-1].Team
+	return !teamsOverlap(room.ProposedTeam, lastTeam)
+}
+
+func normalizeMissionAction(room *Room, playerID, action string) string {
+	if action != MissionActionSabotage {
+		return MissionActionSupport
+	}
+	if roleFaction(room.Roles[playerID]) != "evil" {
+		return MissionActionSupport
+	}
+	return MissionActionSabotage
+}
+
+func aiMissionAction(room *Room, playerID string) string {
+	if roleFaction(room.Roles[playerID]) == "evil" {
+		return MissionActionSabotage
+	}
+	return MissionActionSupport
 }
 
 func gameFinishedEvent(roomID string, room *Room, winner string) Event {
@@ -633,14 +662,36 @@ func buildRoleReveal(room *Room, winner string) map[string]RoleReveal {
 	return reveal
 }
 
-func wrongCount(votes map[string]string) int {
+func countSabotage(votes map[string]string) int {
 	count := 0
-	for _, answer := range votes {
-		if answer != "A" {
+	for _, action := range votes {
+		if action == MissionActionSabotage {
 			count++
 		}
 	}
 	return count
+}
+
+func proposedTeamHasFaction(room *Room, faction string) bool {
+	for _, playerID := range room.ProposedTeam {
+		if roleFaction(room.Roles[playerID]) == faction {
+			return true
+		}
+	}
+	return false
+}
+
+func teamsOverlap(a, b []string) bool {
+	seen := map[string]bool{}
+	for _, item := range a {
+		seen[item] = true
+	}
+	for _, item := range b {
+		if seen[item] {
+			return true
+		}
+	}
+	return false
 }
 
 func missionFocusPrompts(room *Room, success bool, riskActionCount int) []string {
@@ -664,7 +715,7 @@ func missionFocusPrompts(room *Room, success bool, riskActionCount int) []string
 		prompts = append(prompts, "本轮存在 AI 信号干扰，发言异常要结合投票和上队记录判断。")
 	}
 	if riskActionCount > 1 {
-		prompts = append(prompts, "本轮出现多次高风险行动，队内可能不止一个人在推动失败。")
+		prompts = append(prompts, "本轮出现多次破坏，队内可能不止一个渗透者或伪装者在行动。")
 	}
 	return prompts
 }
@@ -680,7 +731,7 @@ func missionSuspicionEvents(room *Room, success bool, riskActionCount int) []str
 
 	events := []string{
 		"第" + itoa(round) + "轮任务失败：嫌疑范围在行动小队 " + joinNames(team) + " 内。",
-		"本轮出现 " + itoa(riskActionCount) + " 次高风险行动，但具体归属保持隐藏。",
+		"本轮出现 " + itoa(riskActionCount) + " 次破坏，但具体归属保持隐藏。",
 	}
 	supporters := approvedVoterNames(room)
 	if len(supporters) > 0 {
@@ -782,6 +833,7 @@ func playerNames(room *Room, playerIDs []string) []string {
 
 func missionStartEvents(roomID string, room *Room) []Event {
 	teamNames := playerNames(room, room.ProposedTeam)
+	scenario := MissionScenarioForRound(room.CurrentRound)
 	events := []Event{{
 		Name:   "phaseChange",
 		RoomID: roomID,
@@ -803,14 +855,9 @@ func missionStartEvents(roomID string, room *Room) []Event {
 			SocketID: memberID,
 			Payload: map[string]any{
 				"puzzle": map[string]any{
-					"id":       "go-minimal-1",
-					"title":    "危机行动选择",
-					"scenario": "任务现场出现异常信号，小队需要选择最稳妥的行动方案。",
-					"options": map[string]string{
-						"A": "先控制异常区域，确认风险来源",
-						"B": "立刻开放全部通道，加快行动",
-						"C": "忽略警报，继续原计划",
-					},
+					"id":       scenario.ID,
+					"title":    scenario.Title,
+					"scenario": scenario.Scenario,
 				},
 				"isPossessed":   memberID == room.PossessedPlayer,
 				"possessedHint": possessionHint(memberID == room.PossessedPlayer),
@@ -824,9 +871,9 @@ func missionStartEvents(roomID string, room *Room) []Event {
 		RoomID: roomID,
 		Payload: map[string]any{
 			"subPhase":    "discuss",
-			"timeLimit":   5,
-			"maxMessages": 2,
-			"maxChars":    30,
+			"timeLimit":   12,
+			"maxMessages": 3,
+			"maxChars":    40,
 		},
 	})
 	return events

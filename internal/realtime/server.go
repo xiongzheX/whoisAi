@@ -106,20 +106,21 @@ func (s *Server) Register() {
 			var payload struct {
 				RoomID  string `json:"roomId"`
 				Answer  string `json:"answer"`
+				Action  string `json:"action"`
 				Success *bool  `json:"success"`
 			}
 			if err := decodePayload(datas, &payload); err != nil {
 				emitError(client, "任务投票参数错误")
 				return
 			}
-			answer := payload.Answer
-			if answer == "" {
-				answer = "A"
-				if payload.Success != nil && !*payload.Success {
-					answer = "B"
-				}
+			action := payload.Action
+			if action == "" {
+				action = payload.Answer
 			}
-			_, events, err := s.service.MissionVote(payload.RoomID, clientID, answer)
+			if action == "" && payload.Success != nil && !*payload.Success {
+				action = game.MissionActionSabotage
+			}
+			_, events, err := s.service.MissionVote(payload.RoomID, clientID, action)
 			if err != nil {
 				emitError(client, err.Error())
 				return
@@ -267,7 +268,7 @@ func (s *Server) scheduleAfterEvents(roomID string, events []game.Event) {
 		case game.PhasePropose:
 			go s.autoPropose(roomID)
 		case game.PhaseDiscuss:
-			go s.autoStartTeamVote(roomID, 2*time.Second)
+			go s.autoStartTeamVote(roomID, 12*time.Second)
 		}
 	}
 	for _, event := range events {
@@ -288,7 +289,7 @@ func (s *Server) scheduleAfterEvents(roomID string, events []game.Event) {
 }
 
 func (s *Server) autoPropose(roomID string) {
-	time.Sleep(1 * time.Second)
+	time.Sleep(2 * time.Second)
 	room, ok := s.store.Room(roomID)
 	if !ok || room.Status != game.StatusPlaying || room.CurrentPhase != game.PhasePropose {
 		return
@@ -296,22 +297,15 @@ func (s *Server) autoPropose(roomID string) {
 	teamSize := game.MissionTeamSize(humanCount(room), room.CurrentRound)
 	pool := make([]string, 0, len(room.Players))
 	for _, player := range room.Players {
-		if !player.Eliminated && !player.IsAI {
+		if !player.Eliminated {
 			pool = append(pool, player.ID)
-		}
-	}
-	if len(pool) < teamSize {
-		pool = pool[:0]
-		for _, player := range room.Players {
-			if !player.Eliminated {
-				pool = append(pool, player.ID)
-			}
 		}
 	}
 	if len(pool) < teamSize {
 		return
 	}
-	_, events, err := s.service.ProposeMission(roomID, room.CurrentLeader, pool[:teamSize])
+	team := rotatingTeam(pool, room.CurrentLeader, room.CurrentRound, teamSize)
+	_, events, err := s.service.ProposeMission(roomID, room.CurrentLeader, team)
 	if err != nil {
 		return
 	}
@@ -364,7 +358,7 @@ func (s *Server) autoMissionVote(roomID string) {
 	if voterID == "" {
 		return
 	}
-	_, events, err := s.service.MissionVote(roomID, voterID, "A")
+	_, events, err := s.service.MissionVote(roomID, voterID, game.MissionActionSupport)
 	if err != nil {
 		return
 	}
@@ -373,7 +367,7 @@ func (s *Server) autoMissionVote(roomID string) {
 }
 
 func (s *Server) autoStartMissionVote(roomID string) {
-	time.Sleep(5 * time.Second)
+	time.Sleep(12 * time.Second)
 	room, ok := s.store.Room(roomID)
 	if !ok || room.CurrentPhase != game.PhaseMission {
 		return
@@ -383,11 +377,42 @@ func (s *Server) autoStartMissionVote(roomID string) {
 		RoomID: roomID,
 		Payload: map[string]any{
 			"subPhase":  "vote",
-			"timeLimit": 10,
+			"timeLimit": 15,
 		},
 	}}
 	s.emitEvents(events)
 	s.scheduleAfterEvents(roomID, events)
+}
+
+func rotatingTeam(pool []string, leaderID string, roundNumber, teamSize int) []string {
+	if teamSize >= len(pool) {
+		return append([]string(nil), pool...)
+	}
+	team := make([]string, 0, teamSize)
+	if leaderID != "" {
+		team = append(team, leaderID)
+	}
+	start := roundNumber - 1
+	if start < 0 {
+		start = 0
+	}
+	for i := 0; len(team) < teamSize && i < len(pool)*2; i++ {
+		playerID := pool[(start+i)%len(pool)]
+		if containsString(team, playerID) {
+			continue
+		}
+		team = append(team, playerID)
+	}
+	return team
+}
+
+func containsString(items []string, target string) bool {
+	for _, item := range items {
+		if item == target {
+			return true
+		}
+	}
+	return false
 }
 
 func humanCount(room *game.Room) int {

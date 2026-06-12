@@ -40,7 +40,8 @@
     <div id="loginScreen" class="screen login-screen" role="main" aria-label="登录界面">
         <div class="login-hero">
             <div class="glitch-container">
-                <h1 class="game-title" data-text="谁是AI" aria-label="谁是AI"><span aria-hidden="true">谁是AI</span></h1>
+                <h1 class="sr-only">谁是AI</h1>
+                <div class="game-title" data-text="谁是AI" aria-hidden="true"><span>谁是AI</span></div>
             </div>
             <p class="game-subtitle">🤖 阿瓦隆式社交推理 · AI附身干扰 🧠</p>
             <p class="game-desc">5-8人局 · 推荐6人 · 完成3次任务</p>
@@ -294,17 +295,22 @@
                     <canvas id="playerStage" width="640" height="160" aria-label="玩家位置显示"></canvas>
                 </div>
 
-                <!-- 谜题区（执行阶段显示） -->
+                <!-- 任务行动区（执行阶段显示） -->
                 <div class="puzzle-area hidden" id="puzzleArea">
                     <div class="puzzle-header">
-                        <span class="puzzle-title" id="puzzleTitle">系统诊断</span>
+                        <span class="puzzle-title" id="puzzleTitle">秘密任务</span>
                         <span class="puzzle-badge" id="puzzlePossessed" style="display:none">⚠️ 信号干扰</span>
                     </div>
                     <div class="puzzle-scenario" id="puzzleScenario"></div>
                     <div class="puzzle-options" id="puzzleOptions">
-                        <button class="puzzle-opt" data-answer="A" id="puzzleOptA">A</button>
-                        <button class="puzzle-opt" data-answer="B" id="puzzleOptB">B</button>
-                        <button class="puzzle-opt" data-answer="C" id="puzzleOptC">C</button>
+                        <button class="puzzle-opt mission-action support" data-action="support" id="missionSupportBtn">
+                            <span class="puzzle-letter">✓</span>
+                            <span class="puzzle-option-text">执行任务</span>
+                        </button>
+                        <button class="puzzle-opt mission-action sabotage hidden" data-action="sabotage" id="missionSabotageBtn">
+                            <span class="puzzle-letter">!</span>
+                            <span class="puzzle-option-text">破坏任务</span>
+                        </button>
                     </div>
                 </div>
 
@@ -316,7 +322,7 @@
 
                 <!-- 旁观区（非小队成员执行阶段显示） -->
                 <div class="spectate-area hidden" id="spectateArea">
-                    <div class="spectate-hint">🔍 小队正在分析系统故障...</div>
+                    <div class="spectate-hint">🔍 行动小队正在秘密执行任务...</div>
                     <div class="spectate-team" id="spectateTeam"></div>
                 </div>
 
@@ -354,9 +360,9 @@
 
             <!-- 任务阶段：行动选择 -->
             <div id="missionActions" class="action-group hidden">
-                <p class="action-hint">请选择行动方案</p>
-                <button class="action-btn approve" onclick="submitMissionVote(true)">提交稳妥方案</button>
-                <button class="action-btn reject hidden" id="sabotageBtn" onclick="submitMissionVote(false)">提交高风险方案</button>
+                <p class="action-hint">请选择秘密行动</p>
+                <button class="action-btn approve" onclick="submitMissionVote(true)">执行任务</button>
+                <button class="action-btn reject hidden" id="sabotageBtn" onclick="submitMissionVote(false)">破坏任务</button>
             </div>
         </div>
 
@@ -507,7 +513,7 @@
             <div class="help-section">
                 <h3>🎮 游戏目标</h3>
                 <p>守护者阵营需要完成3次任务；渗透者阵营需要让3次任务失败。</p>
-                <p>这不是答题游戏。执行阶段的选择用于暴露立场：守护者推动稳妥行动，渗透者会把高风险行动包装成合理选择。</p>
+                <p>这不是答题游戏。任务阶段是隐藏身份检验：守护者执行任务，渗透者可以秘密破坏。</p>
             </div>
             <div class="help-section">
                 <h3>👥 角色介绍</h3>
@@ -523,7 +529,7 @@
                     <li>队长提名小队成员</li>
                     <li>全员讨论（每人最多6条消息）</li>
                     <li>全员投票决定是否执行</li>
-                    <li>小队成员讨论危机场景并选择行动方案</li>
+                    <li>小队成员秘密执行任务，渗透者可以选择破坏</li>
                 </ol>
             </div>
             <div class="help-section">
