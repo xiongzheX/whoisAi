@@ -3,6 +3,7 @@ package game
 import (
 	"errors"
 	"testing"
+	"time"
 )
 
 var errTestRewrite = errors.New("rewrite failed")
@@ -243,6 +244,12 @@ func TestServiceTeamVoteApprovalStartsMission(t *testing.T) {
 	if _, _, err := service.ProposeMission("room1", state.CurrentLeader, players[:teamSize]); err != nil {
 		t.Fatalf("ProposeMission returned error: %v", err)
 	}
+	if _, _, err := service.TeamVote("room1", players[0], true); err == nil {
+		t.Fatal("TeamVote succeeded before the discussion timer advanced the phase")
+	}
+	if _, _, err := service.StartTeamVote("room1"); err != nil {
+		t.Fatalf("StartTeamVote returned error: %v", err)
+	}
 
 	var events []Event
 	for _, id := range players {
@@ -258,12 +265,15 @@ func TestServiceTeamVoteApprovalStartsMission(t *testing.T) {
 		t.Fatalf("events = %+v, want teamVoteResult first", events)
 	}
 	var puzzlePayload map[string]any
+	spectatorCount := 0
 	for _, event := range events {
-		if event.Name != "missionPuzzle" {
+		if event.Name == "missionSpectate" {
+			spectatorCount++
+		}
+		if event.Name != "missionPuzzle" || puzzlePayload != nil {
 			continue
 		}
 		puzzlePayload = event.Payload.(map[string]any)["puzzle"].(map[string]any)
-		break
 	}
 	if puzzlePayload == nil {
 		t.Fatalf("events = %+v, want missionPuzzle payload", events)
@@ -276,6 +286,9 @@ func TestServiceTeamVoteApprovalStartsMission(t *testing.T) {
 	}
 	if _, ok := puzzlePayload["options"]; ok {
 		t.Fatalf("puzzle payload exposed options: %+v", puzzlePayload)
+	}
+	if got, want := spectatorCount, len(players)-teamSize; got != want {
+		t.Errorf("missionSpectate event count = %d, want %d", got, want)
 	}
 }
 
@@ -294,8 +307,35 @@ func TestServiceStartGameRequiresRoomPlayerAndMinimumPlayers(t *testing.T) {
 	if _, _, err := service.StartGame("room1", "outsider"); err == nil {
 		t.Fatalf("StartGame by outsider returned nil error, want rejection")
 	}
-	if _, _, err := service.StartGame("room1", "p1"); err == nil || err.Error() != "至少需要 5 名玩家才能开始" {
-		t.Fatalf("StartGame with four players returned %v, want minimum player error", err)
+	if _, _, err := service.StartGame("room1", "p1"); err == nil || err.Error() != "人数不足 5 人时请开启 AI 补位" {
+		t.Fatalf("StartGame with four players returned %v, want AI fill error", err)
+	}
+}
+
+func TestServiceStartGameAllowsThreeHumansWithAIFill(t *testing.T) {
+	t.Parallel()
+
+	store := NewStore()
+	service := NewService(store)
+	store.CreateRoom("room1")
+	for _, id := range []string{"host", "p2", "p3"} {
+		if _, err := store.AddPlayer("room1", id, id, ModeNormal); err != nil {
+			t.Fatalf("AddPlayer returned error: %v", err)
+		}
+	}
+	room, err := store.FillWithAIByHost("room1", "host", MinPlayers)
+	if err != nil {
+		t.Fatalf("FillWithAIByHost returned error: %v", err)
+	}
+	if len(room.Players) != MinPlayers {
+		t.Fatalf("players = %d, want %d", len(room.Players), MinPlayers)
+	}
+	state, _, err := service.StartGame("room1", "host")
+	if err != nil {
+		t.Fatalf("StartGame returned error: %v", err)
+	}
+	if len(state.Roles) != MinPlayers {
+		t.Fatalf("roles = %d, want %d including AI", len(state.Roles), MinPlayers)
 	}
 }
 
@@ -338,6 +378,9 @@ func TestServiceTeamVoteTieRejectsTeam(t *testing.T) {
 	teamSize := MissionTeamSize(len(players), state.CurrentRound)
 	if _, _, err := service.ProposeMission("room1", state.CurrentLeader, players[:teamSize]); err != nil {
 		t.Fatalf("ProposeMission returned error: %v", err)
+	}
+	if _, _, err := service.StartTeamVote("room1"); err != nil {
+		t.Fatalf("StartTeamVote returned error: %v", err)
 	}
 
 	var events []Event
@@ -382,6 +425,9 @@ func TestServiceFiveRejectedTeamsFinishesForInfiltrators(t *testing.T) {
 		teamSize := MissionTeamSize(len(players), state.CurrentRound)
 		if _, _, err := service.ProposeMission("room1", state.CurrentLeader, players[:teamSize]); err != nil {
 			t.Fatalf("ProposeMission rejection %d returned error: %v", rejection, err)
+		}
+		if _, _, err := service.StartTeamVote("room1"); err != nil {
+			t.Fatalf("StartTeamVote rejection %d returned error: %v", rejection, err)
 		}
 		for _, id := range players {
 			state, events, err = service.TeamVote("room1", id, false)
@@ -446,6 +492,7 @@ func TestServiceTestModeAssignsAIRolesAndAISabotagesWhenInfiltrator(t *testing.T
 	state.ProposedTeam = []string{"human", aiInfiltrator}
 	store.mu.Lock()
 	store.rooms["room1"].CurrentPhase = state.CurrentPhase
+	store.rooms["room1"].MissionSubPhase = "vote"
 	store.rooms["room1"].ProposedTeam = append([]string(nil), state.ProposedTeam...)
 	store.mu.Unlock()
 
@@ -501,6 +548,152 @@ func TestServiceStartTeamVoteEmitsPhaseChange(t *testing.T) {
 	}
 }
 
+func TestServiceMissionChatAndReconnectEventsStayPrivate(t *testing.T) {
+	t.Parallel()
+
+	store := NewStore()
+	service := NewService(store)
+	store.CreateRoom("room1")
+	players := []string{"p1", "p2", "p3", "p4", "p5"}
+	for _, id := range players {
+		if _, err := store.AddPlayer("room1", id, id, ModeNormal); err != nil {
+			t.Fatalf("AddPlayer returned error: %v", err)
+		}
+	}
+	state, _, err := service.StartGame("room1", "p1")
+	if err != nil {
+		t.Fatalf("StartGame returned error: %v", err)
+	}
+	team := players[:MissionTeamSize(len(players), state.CurrentRound)]
+	if _, _, err = service.ProposeMission("room1", state.CurrentLeader, team); err != nil {
+		t.Fatalf("ProposeMission returned error: %v", err)
+	}
+	if _, _, err = service.StartTeamVote("room1"); err != nil {
+		t.Fatalf("StartTeamVote returned error: %v", err)
+	}
+	for _, id := range players {
+		if _, _, err = service.TeamVote("room1", id, true); err != nil {
+			t.Fatalf("TeamVote returned error: %v", err)
+		}
+	}
+	message, left, err := service.MissionChat("room1", team[0], "我倾向支持")
+	if err != nil || message.Displayed == "" || left != MaxMissionMessages-1 {
+		t.Fatalf("MissionChat = %+v, %d, %v", message, left, err)
+	}
+	if _, _, err = service.MissionChat("room1", players[len(players)-1], "旁观发言"); err == nil {
+		t.Fatal("MissionChat allowed a spectator to speak")
+	}
+
+	events, err := service.ReconnectEvents("room1", team[0])
+	if err != nil {
+		t.Fatalf("ReconnectEvents returned error: %v", err)
+	}
+	if len(events) < 3 {
+		t.Fatalf("ReconnectEvents = %+v, want role, phase, and mission state", events)
+	}
+	for _, event := range events {
+		if event.SocketID != team[0] {
+			t.Fatalf("event %q targets %q, want %q", event.Name, event.SocketID, team[0])
+		}
+	}
+}
+
+func TestServiceRecordsNominationReasonAndPublicStance(t *testing.T) {
+	t.Parallel()
+
+	store := NewStore()
+	service := NewService(store)
+	store.CreateRoom("room1")
+	players := []string{"p1", "p2", "p3", "p4", "p5"}
+	for _, id := range players {
+		if _, err := store.AddPlayer("room1", id, id, ModeNormal); err != nil {
+			t.Fatalf("AddPlayer returned error: %v", err)
+		}
+	}
+	state, _, err := service.StartGame("room1", "p1")
+	if err != nil {
+		t.Fatalf("StartGame returned error: %v", err)
+	}
+	team := players[:MissionTeamSize(len(players), state.CurrentRound)]
+	state, events, err := service.ProposeMissionWithReason("room1", state.CurrentLeader, team, "他们上轮立场比较一致")
+	if err != nil {
+		t.Fatalf("ProposeMissionWithReason returned error: %v", err)
+	}
+	if state.NominationReason == "" || len(state.NominationHistory) != 1 {
+		t.Fatalf("nomination state = %+v", state.NominationHistory)
+	}
+	payload := events[0].Payload.(map[string]any)
+	if payload["reason"] != "他们上轮立场比较一致" {
+		t.Fatalf("missionProposed reason = %v", payload["reason"])
+	}
+
+	state, events, err = service.SubmitStance("room1", "p1", "p2", "p3", "p2解释更连贯，p3跟票太快")
+	if err != nil {
+		t.Fatalf("SubmitStance returned error: %v", err)
+	}
+	if len(events) != 1 || events[0].Name != "stanceUpdated" || len(state.Stances[1]) != 1 {
+		t.Fatalf("stance state/events = %+v / %+v", state.Stances, events)
+	}
+	if _, _, err = service.SubmitStance("room1", "p1", "p2", "p2", "相同对象"); err == nil {
+		t.Fatal("SubmitStance accepted the same trust and suspect target")
+	}
+}
+
+func TestServiceReconnectRestoresDiscussionContext(t *testing.T) {
+	t.Parallel()
+
+	store := NewStore()
+	service := NewService(store)
+	store.CreateRoom("reconnect-context")
+	players := []string{"p1", "p2", "p3", "p4", "p5"}
+	for _, id := range players {
+		if _, err := store.AddPlayer("reconnect-context", id, id, ModeNormal); err != nil {
+			t.Fatalf("AddPlayer(%q) returned error: %v", id, err)
+		}
+	}
+	state, _, err := service.StartGame("reconnect-context", "p1")
+	if err != nil {
+		t.Fatalf("StartGame returned error: %v", err)
+	}
+	team := players[:MissionTeamSize(len(players), state.CurrentRound)]
+	if _, _, err := service.ProposeMissionWithReason(
+		"reconnect-context",
+		state.CurrentLeader,
+		team,
+		"刷新后仍应看到这个理由",
+	); err != nil {
+		t.Fatalf("ProposeMissionWithReason returned error: %v", err)
+	}
+	if _, _, err := service.Chat("reconnect-context", "p1", "刷新前的讨论消息"); err != nil {
+		t.Fatalf("Chat returned error: %v", err)
+	}
+
+	events, err := service.ReconnectEvents("reconnect-context", "p2")
+	if err != nil {
+		t.Fatalf("ReconnectEvents returned error: %v", err)
+	}
+	phaseEvent := findEvent(events, "phaseChange")
+	if phaseEvent == nil {
+		t.Fatal("ReconnectEvents missing phaseChange")
+	}
+	payload := phaseEvent.Payload.(map[string]any)
+	if payload["leader"] == nil || payload["nominationReason"] != "刷新后仍应看到这个理由" {
+		t.Errorf("reconnect phase payload = %+v, want leader and nomination reason", payload)
+	}
+	if payload["deadlineAt"] == nil {
+		t.Errorf("reconnect phase payload = %+v, want server deadline", payload)
+	}
+	chatEvent := findEvent(events, "chatHistory")
+	if chatEvent == nil {
+		t.Fatal("ReconnectEvents missing chatHistory")
+	}
+	chatPayload := chatEvent.Payload.(map[string]any)
+	messages := chatPayload["messages"].([]PublicChatMessage)
+	if len(messages) != 1 || messages[0].PlayerID != "p1" || messages[0].Displayed == "" {
+		t.Errorf("reconnect chat history = %+v, want saved discussion message", messages)
+	}
+}
+
 func TestServiceMissionVoteSuccessAdvancesRound(t *testing.T) {
 	t.Parallel()
 
@@ -522,10 +715,19 @@ func TestServiceMissionVoteSuccessAdvancesRound(t *testing.T) {
 	if _, _, err := service.ProposeMission("room1", state.CurrentLeader, team); err != nil {
 		t.Fatalf("ProposeMission returned error: %v", err)
 	}
+	if _, _, err := service.StartTeamVote("room1"); err != nil {
+		t.Fatalf("StartTeamVote returned error: %v", err)
+	}
 	for _, id := range players {
 		if _, _, err := service.TeamVote("room1", id, true); err != nil {
 			t.Fatalf("TeamVote returned error: %v", err)
 		}
+	}
+	if _, _, err = service.MissionVote("room1", team[0], MissionActionSupport); err == nil {
+		t.Fatal("MissionVote succeeded during the mission discussion sub-phase")
+	}
+	if _, _, err = service.StartMissionVote("room1"); err != nil {
+		t.Fatalf("StartMissionVote returned error: %v", err)
 	}
 
 	var events []Event
@@ -570,6 +772,7 @@ func TestServiceMissionVoteIgnoresSabotageFromGoodPlayer(t *testing.T) {
 	store.mu.Lock()
 	room := store.rooms["room1"]
 	room.CurrentPhase = PhaseMission
+	room.MissionSubPhase = "vote"
 	room.ProposedTeam = append([]string(nil), team...)
 	room.MissionVotes = map[string]string{}
 	room.CurrentLeader = state.CurrentLeader
@@ -614,6 +817,7 @@ func TestServiceMissionVoteFailsWhenInfiltratorSabotages(t *testing.T) {
 	store.mu.Lock()
 	room := store.rooms["room1"]
 	room.CurrentPhase = PhaseMission
+	room.MissionSubPhase = "vote"
 	room.ProposedTeam = append([]string(nil), team...)
 	room.MissionVotes = map[string]string{}
 	room.CurrentLeader = state.CurrentLeader
@@ -634,6 +838,143 @@ func TestServiceMissionVoteFailsWhenInfiltratorSabotages(t *testing.T) {
 	resultPayload := events[1].Payload.(map[string]any)
 	if got := resultPayload["sabotageCount"]; got != 1 {
 		t.Fatalf("sabotageCount = %v, want 1", got)
+	}
+}
+
+func TestServiceSoloModeUsesServerDeadlines(t *testing.T) {
+	t.Parallel()
+
+	store := NewStore()
+	service := NewService(store)
+	store.CreateRoom("solo-deadline")
+	if _, err := store.AddPlayer("solo-deadline", "host", "房主", ModeSolo); err != nil {
+		t.Fatalf("AddPlayer returned error: %v", err)
+	}
+	for range 5 {
+		if _, err := store.AddAIPlayer("solo-deadline"); err != nil {
+			t.Fatalf("AddAIPlayer returned error: %v", err)
+		}
+	}
+
+	state, events, err := service.StartGame("solo-deadline", "host")
+	if err != nil {
+		t.Fatalf("StartGame returned error: %v", err)
+	}
+	if state.PhaseDeadline <= time.Now().UnixMilli() {
+		t.Fatalf("StartGame phase deadline = %d, want a future deadline", state.PhaseDeadline)
+	}
+	phaseEvent := findEvent(events, "phaseChange")
+	if phaseEvent == nil {
+		t.Fatal("StartGame events missing phaseChange")
+	}
+	payload := phaseEvent.Payload.(map[string]any)
+	if got, want := payload["timeLimit"], 12; got != want {
+		t.Errorf("solo propose timeLimit = %v, want %v", got, want)
+	}
+	if got := payload["deadlineAt"]; got != state.PhaseDeadline {
+		t.Errorf("phaseChange deadlineAt = %v, want %d", got, state.PhaseDeadline)
+	}
+}
+
+func TestAITeamVoteAlwaysAdvancesScriptedModes(t *testing.T) {
+	t.Parallel()
+
+	for _, mode := range []Mode{ModeTest, ModeSolo} {
+		t.Run(string(mode), func(t *testing.T) {
+			room := &Room{
+				Mode:           mode,
+				Roles:          map[string]Role{"ai": RoleInfiltrator},
+				MissionResults: []bool{false},
+				VoteHistory:    []VoteRecord{{Team: []string{"other"}}},
+				ProposedTeam:   []string{"human"},
+			}
+			if !aiTeamVote(room, "ai") {
+				t.Errorf("aiTeamVote(mode=%q) = false, want true for deterministic scripted flow", mode)
+			}
+		})
+	}
+}
+
+func TestServiceAutoTeamVoteIsMarkedInHistory(t *testing.T) {
+	t.Parallel()
+
+	store := NewStore()
+	service := NewService(store)
+	store.CreateRoom("auto-vote")
+	players := []string{"p1", "p2", "p3", "p4", "p5"}
+	for _, id := range players {
+		if _, err := store.AddPlayer("auto-vote", id, id, ModeNormal); err != nil {
+			t.Fatalf("AddPlayer(%q) returned error: %v", id, err)
+		}
+	}
+	state, _, err := service.StartGame("auto-vote", "p1")
+	if err != nil {
+		t.Fatalf("StartGame returned error: %v", err)
+	}
+	if _, _, err := service.ProposeMission("auto-vote", state.CurrentLeader, players[:2]); err != nil {
+		t.Fatalf("ProposeMission returned error: %v", err)
+	}
+	if _, _, err := service.StartTeamVote("auto-vote"); err != nil {
+		t.Fatalf("StartTeamVote returned error: %v", err)
+	}
+	if _, _, err := service.AutoTeamVote("auto-vote", "p1", false); err != nil {
+		t.Fatalf("AutoTeamVote returned error: %v", err)
+	}
+	for _, id := range players[1:] {
+		state, _, err = service.TeamVote("auto-vote", id, true)
+		if err != nil {
+			t.Fatalf("TeamVote(%q) returned error: %v", id, err)
+		}
+	}
+	if len(state.VoteHistory) != 1 {
+		t.Fatalf("vote history length = %d, want 1", len(state.VoteHistory))
+	}
+	if !state.VoteHistory[0].Votes["p1"].AutoManaged {
+		t.Errorf("auto vote = %+v, want autoManaged=true", state.VoteHistory[0].Votes["p1"])
+	}
+	if state.VoteHistory[0].Votes["p2"].AutoManaged {
+		t.Errorf("manual vote = %+v, want autoManaged=false", state.VoteHistory[0].Votes["p2"])
+	}
+}
+
+func TestServiceSoloDebugCanForceMissionFailure(t *testing.T) {
+	t.Parallel()
+
+	store := NewStore()
+	service := NewService(store)
+	store.CreateRoom("solo-debug")
+	if _, err := store.AddPlayer("solo-debug", "host", "房主", ModeSolo); err != nil {
+		t.Fatalf("AddPlayer returned error: %v", err)
+	}
+	for range 4 {
+		if _, err := store.AddAIPlayer("solo-debug"); err != nil {
+			t.Fatalf("AddAIPlayer returned error: %v", err)
+		}
+	}
+	if _, _, err := service.StartGame("solo-debug", "host"); err != nil {
+		t.Fatalf("StartGame returned error: %v", err)
+	}
+
+	store.mu.Lock()
+	room := store.rooms["solo-debug"]
+	room.CurrentPhase = PhaseMission
+	room.MissionSubPhase = "vote"
+	room.ProposedTeam = []string{room.Players[0].ID, room.Players[1].ID}
+	room.MissionVotes = map[string]string{}
+	store.mu.Unlock()
+
+	if _, err := service.SetDebugMissionResult("solo-debug", "host", false); err != nil {
+		t.Fatalf("SetDebugMissionResult returned error: %v", err)
+	}
+	state, _, err := service.MissionVote("solo-debug", "host", MissionActionSupport)
+	if err != nil {
+		t.Fatalf("MissionVote returned error: %v", err)
+	}
+	if len(state.MissionResults) != 1 || state.MissionResults[0] {
+		t.Fatalf("mission results = %+v, want forced failure", state.MissionResults)
+	}
+	if state.DebugMissionResult != nil {
+		t.Errorf("debug mission result = %v, want cleared after resolution", *state.DebugMissionResult)
 	}
 }
 
@@ -663,10 +1004,16 @@ func TestServiceGameFinishedIncludesRoleRevealPayload(t *testing.T) {
 	if _, _, err := service.ProposeMission("room1", state.CurrentLeader, team); err != nil {
 		t.Fatalf("ProposeMission returned error: %v", err)
 	}
+	if _, _, err := service.StartTeamVote("room1"); err != nil {
+		t.Fatalf("StartTeamVote returned error: %v", err)
+	}
 	for _, id := range players {
 		if _, _, err := service.TeamVote("room1", id, true); err != nil {
 			t.Fatalf("TeamVote returned error: %v", err)
 		}
+	}
+	if _, _, err = service.StartMissionVote("room1"); err != nil {
+		t.Fatalf("StartMissionVote returned error: %v", err)
 	}
 
 	var events []Event
@@ -697,6 +1044,12 @@ func TestServiceGameFinishedIncludesRoleRevealPayload(t *testing.T) {
 			t.Fatalf("roles[%s] = %+v, want complete reveal payload", id, reveal)
 		}
 	}
+	if nominations := payload["nominationHistory"].([]NominationRecord); len(nominations) != 1 {
+		t.Errorf("gameFinished nomination history length = %d, want 1", len(nominations))
+	}
+	if votes := payload["voteHistory"].([]VoteRecord); len(votes) != 1 {
+		t.Errorf("gameFinished vote history length = %d, want 1", len(votes))
+	}
 }
 
 func hasEvent(events []Event, name string) bool {
@@ -706,4 +1059,13 @@ func hasEvent(events []Event, name string) bool {
 		}
 	}
 	return false
+}
+
+func findEvent(events []Event, name string) *Event {
+	for i := range events {
+		if events[i].Name == name {
+			return &events[i]
+		}
+	}
+	return nil
 }

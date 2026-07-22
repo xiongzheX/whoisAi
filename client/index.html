@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>谁是AI v3 — 阿瓦隆式社交推理</title>
-    <link rel="stylesheet" href="css/style.css">
-    <link rel="stylesheet" href="css/style-v3.css">
+    <title>社交游戏房 · 谁是AI</title>
+    <link rel="stylesheet" href="css/style.css?v=20260715-2">
+    <link rel="stylesheet" href="css/style-v3.css?v=20260722-2">
+    <link rel="stylesheet" href="css/who-ai-soft.css?v=20260722-6">
 </head>
 <body>
     <!-- 跳过链接 -->
@@ -39,28 +40,40 @@
     <!-- ═══════════════════════════════════ -->
     <div id="loginScreen" class="screen login-screen" role="main" aria-label="登录界面">
         <div class="login-hero">
-            <div class="glitch-container">
-                <h1 class="sr-only">谁是AI</h1>
-                <div class="game-title" data-text="谁是AI" aria-hidden="true"><span>谁是AI</span></div>
+            <div class="platform-kicker"><span class="platform-live-dot"></span> PLAYGROUND / 好友小游园</div>
+            <h1 class="game-title">今晚玩点<br><em>轻松的</em></h1>
+            <p class="game-subtitle">开一间房，叫上朋友。不赶进度，随时换个玩法。</p>
+            <div class="tagline" aria-label="平台特点">
+                <span class="tagline-item">房间不散场</span>
+                <span class="tagline-item">服务端统一结算</span>
+                <span class="tagline-item">手机电脑都能玩</span>
             </div>
-            <p class="game-subtitle">🤖 阿瓦隆式社交推理 · AI附身干扰 🧠</p>
-            <p class="game-desc">5-8人局 · 推荐6人 · 完成3次任务</p>
-            <div class="tagline">
-                <span class="tagline-item">🎯 判断小队是否可信</span>
-                <span class="tagline-item">🕵️ 找出潜伏渗透者</span>
-                <span class="tagline-item">🧩 判断谁在推动失败</span>
-            </div>
+            <section class="platform-catalog" aria-labelledby="catalogTitle">
+                <div class="platform-catalog-head">
+                    <div>
+                        <span>PICK A GAME</span>
+                        <h2 id="catalogTitle">先挑一个玩法</h2>
+                    </div>
+                    <small>三款已可开房</small>
+                </div>
+                <div id="platformGameCatalog" class="platform-game-grid" aria-live="polite">
+                    <article class="platform-game-card is-active">
+                        <span class="game-card-index">01</span>
+                        <div><strong>谁是 AI</strong><small>5–8 人房间</small></div>
+                    </article>
+                </div>
+            </section>
         </div>
-        <div class="login-form" role="form" aria-label="登录表单">
-            <div class="input-group">
-                <label for="playerName">👤 你的昵称</label>
-                <input type="text" id="playerName" placeholder="输入昵称（2-10个字）" maxlength="10" autocomplete="off" autofocus aria-required="true">
-                <div class="input-hint">好名字让人印象深刻 ✨</div>
+        <div class="login-form" id="who-is-ai-room" role="form" aria-label="谁是 AI 房间入口">
+            <div class="room-form-heading">
+                <span class="room-form-number">01</span>
+                <div><small>SOCIAL DEDUCTION</small><h2>谁是 AI</h2></div>
             </div>
+            <p class="room-form-intro">从发言、组队和任务里找出渗透者。适合人多时慢慢盘逻辑。</p>
             <div class="input-group">
-                <label for="roomId">🏠 房间号</label>
-                <input type="text" id="roomId" placeholder="默认 room1" value="room1" autocomplete="off">
-                <div class="input-hint">和朋友输入相同房间号一起玩</div>
+                <label for="playerName">你的昵称</label>
+                <input type="text" id="playerName" placeholder="输入昵称（2-10个字）" maxlength="10" autocomplete="off" aria-required="true">
+                <div class="input-hint">好名字让人印象深刻 ✨</div>
             </div>
             <div class="mode-toggle" role="group" aria-label="游戏模式">
                 <button type="button" class="mode-btn active" data-mode="normal" onclick="setMode('normal')" aria-pressed="true" aria-describedby="normalModeDesc">
@@ -73,27 +86,72 @@
                     <span class="mode-icon">🎮</span>单人调试
                 </button>
             </div>
-            <div id="normalModeDesc" class="sr-only">正常联机模式，需要朋友输入相同房间号加入</div>
+            <div id="normalModeDesc" class="sr-only">正常联机模式，3 名真人即可开局，人数不足 5 人时自动补 AI</div>
             <div id="testModeDesc" class="sr-only">快速测试游戏，自动添加AI玩家</div>
             <div id="soloModeDesc" class="sr-only">单人调试模式，自动添加AI玩家并开始游戏</div>
-            <button id="joinBtn" class="join-btn" onclick="joinGame()" aria-label="开始游戏">
-                <span class="btn-text">▶ 开始游戏</span>
-                <span class="btn-loading hidden">🔄 连接中...</span>
+            <button id="resumeGameBtn" class="resume-game-btn hidden" onclick="resumeLastGame()" aria-label="恢复上次对局"></button>
+            <button id="quickCreateWhoAI" class="join-btn" onclick="joinGame(true)" aria-label="快速创建新房间">
+                <span class="btn-text">快速开房</span>
+                <span class="btn-loading hidden">🔄 创建中...</span>
             </button>
+            <div class="platform-invite-join who-invite-join">
+                <label for="roomId">已有邀请码</label>
+                <div>
+                    <input type="text" id="roomId" placeholder="粘贴朋友发来的邀请码" value="" autocomplete="off">
+                    <button id="joinBtn" class="room-join-secondary" onclick="joinGame(false)" aria-label="按邀请码加入房间">
+                    <span class="btn-text">按邀请码加入</span>
+                    <span class="btn-loading hidden">🔄 连接中...</span>
+                    </button>
+                </div>
+            </div>
+            <div id="whoRoomBrowserSlot" class="platform-room-browser-slot"></div>
             <button class="tutorial-btn" onclick="window.open('/tutorial.html', '_blank')" aria-label="游戏教程">
-                📖 游戏教程
+                先看玩法
             </button>
             <div class="quick-tips">
                 <p class="tips-title">💡 快速提示</p>
                 <ul class="tips-list">
-                    <li>正常模式需要朋友输入相同房间号加入</li>
+                    <li>正常模式 3 名真人可开局，房主一键补 AI</li>
                     <li>测试模式会自动补 AI，适合快速开局验证</li>
                     <li>守护者找可信小队，渗透者诱导任务失败</li>
                 </ul>
             </div>
         </div>
+        <aside class="login-form platform-duel-actions hidden" id="platformDuelActions" aria-label="双人游戏房间入口">
+            <div class="room-form-heading">
+                <span class="room-form-number" id="platformDuelNumber">02</span>
+                <div><small>QUICK DUEL</small><h2 id="platformDuelGameName">豆豆百米赛</h2></div>
+            </div>
+            <p class="room-form-intro" id="platformSelectedDescription">两人配好选手，准备后同步开赛。</p>
+            <a id="createPlatformRoom" class="platform-primary-create" href="/games/bean-sprint?intent=create">
+                <strong>快速开房</strong>
+                <span>自动生成邀请码 →</span>
+            </a>
+            <div class="platform-invite-join">
+                <label for="platformInviteCode">已有邀请码</label>
+                <div>
+                    <input id="platformInviteCode" type="text" placeholder="例如 race-A1B2C3" autocomplete="off">
+                    <button id="platformJoinCode" type="button">加入</button>
+                </div>
+            </div>
+            <div id="duelRoomBrowserSlot" class="platform-room-browser-slot">
+                <div id="platformRoomBrowser" class="platform-room-browser" aria-live="polite">
+                    <div class="platform-room-browser-head">
+                        <div>
+                            <small>OPEN ROOMS</small>
+                            <h3><span id="selectedRoomGameName">豆豆百米赛</span> · 等待房间</h3>
+                        </div>
+                        <button id="refreshPlatformRooms" type="button" class="platform-room-refresh">刷新</button>
+                    </div>
+                    <div id="platformRoomList" class="platform-room-list">
+                        <p class="platform-room-loading">正在查看谁在等朋友…</p>
+                    </div>
+                </div>
+            </div>
+            <p class="platform-entry-note">公开房可以直接加入；朋友发来的邀请码也可以直达同一间房。</p>
+        </aside>
         <div class="login-footer">
-            <p>5-8人 · 推荐6人 · 5轮 · 约10-15分钟 · 支持手机和电脑</p>
+            <p>3-8人 · 推荐6人 · 5轮 · 约10-15分钟 · 支持手机和电脑</p>
             <div class="social-proof">
                 <span class="proof-item">🌐 正常模式好友同局</span>
                 <span class="proof-item">🧪 测试模式自动补 AI</span>
@@ -111,7 +169,7 @@
                 <div class="room-id-display">
                     <span class="room-label">房间号：</span>
                     <span class="room-id" id="waitingRoomId">room1</span>
-                    <button class="copy-btn" onclick="copyRoomId()" title="复制房间号">📋</button>
+                    <button class="copy-btn" onclick="copyRoomId()" title="复制邀请链接" aria-label="复制邀请链接">📋</button>
                 </div>
             </div>
             
@@ -165,7 +223,7 @@
                 <div class="progress-bar">
                     <div class="progress-fill" id="progressFill"></div>
                 </div>
-                <p class="waiting-count" aria-live="polite">当前 <span id="waitingCount">0</span> 人 · 最低 5 · 最多 8</p>
+                <p class="waiting-count" aria-live="polite">当前 <span id="waitingCount">0</span> 人 · 最低 3 名真人 · 最多 8</p>
             </div>
             
             <div class="waiting-hint" id="waitingHint">
@@ -184,10 +242,10 @@
             
             <div class="waiting-actions">
                 <button class="btn-sm start-game-btn" id="startGameBtn" onclick="requestStartGame()" disabled aria-label="开始本房间游戏">开始游戏</button>
-                <button class="btn-sm" id="copyBtn" onclick="copyRoomId()" aria-label="复制房间号">📋 复制房间号</button>
+                <button class="btn-sm" id="copyBtn" onclick="copyRoomId()" aria-label="复制邀请链接">📋 复制邀请链接</button>
                 <button class="btn-sm" onclick="shareRoom()" aria-label="分享房间">🔗 分享房间</button>
             </div>
-            <p class="start-game-hint" id="startGameHint">首位玩家可在 5 人到齐后开始。</p>
+            <p class="start-game-hint" id="startGameHint">首位玩家可在 3 名真人到齐后开始。</p>
             
             <div class="mode-display" id="modeDisplay">
                 <span class="mode-label">当前模式：</span>
@@ -208,7 +266,10 @@
     <!-- ═══════════════════════════════════ -->
     <div id="gameScreen" class="screen hidden" role="main" aria-label="游戏界面">
         <!-- 测试模式水印 -->
-        <div id="testModeWatermark" class="test-mode-watermark hidden">🧪 测试环境</div>
+        <div id="testModeWatermark" class="test-mode-watermark hidden">
+            <span id="testModeLabel">🧪 测试环境</span>
+            <button id="testQuickAdvanceBtn" class="test-quick-advance hidden" type="button" onclick="skipPhase()">快速推进</button>
+        </div>
         <!-- 顶部状态栏 -->
         <div class="top-bar" role="banner" aria-label="游戏状态">
             <div class="top-left">
@@ -232,7 +293,7 @@
                 <div class="mission-tracker">
                     <h3>📋 任务进度</h3>
                     <div class="mission-dots" id="missionDots" aria-live="polite">
-                        <!-- 4 个圆点由 JS 渲染 -->
+                        <!-- 5 个圆点由 JS 渲染 -->
                     </div>
                     <div class="mission-labels">
                         <span class="mission-stat">✅ <span id="successCount">0</span></span>
@@ -246,6 +307,14 @@
                     <p id="leaderName" class="leader-name" aria-live="polite">--</p>
                     <h3>🎯 提名小队</h3>
                     <div id="proposedTeam" class="team-members" aria-live="polite"></div>
+                    <p id="nominationReason" class="nomination-reason">等待队长说明提名理由</p>
+                </div>
+
+                <div class="stance-board" id="stanceBoard">
+                    <h3>🤝 公开立场</h3>
+                    <div id="stanceList" class="stance-list" aria-live="polite">
+                        <div class="stance-item muted">讨论阶段可公开表态</div>
+                    </div>
                 </div>
 
                 <!-- 讨论焦点 -->
@@ -312,6 +381,7 @@
                             <span class="puzzle-option-text">破坏任务</span>
                         </button>
                     </div>
+                    <p id="missionSubmissionStatus" class="mission-submission-status hidden" role="status" aria-live="polite"></p>
                 </div>
 
                 <!-- 揭晓区（揭晓阶段显示） -->
@@ -345,10 +415,20 @@
 
         <!-- 底部操作栏 -->
         <div class="action-bar hidden" id="actionBar">
+            <div id="phaseTransitionNotice" class="phase-transition-notice hidden" role="status" aria-live="polite"></div>
             <!-- 提名阶段：队长选人 -->
             <div id="proposeActions" class="action-group hidden">
                 <p class="action-hint" id="proposeHint">请选择 <span id="needCount">2</span> 名队友</p>
+                <input id="nominationReasonInput" class="social-reason-input" maxlength="60" placeholder="一句话说明为什么选他们" aria-label="提名理由">
                 <button class="action-btn confirm" id="confirmProposeBtn" onclick="confirmPropose()" disabled>确认提名</button>
+            </div>
+
+            <div id="stanceActions" class="action-group hidden">
+                <p class="action-hint" id="stanceActionHint">公开你的当轮判断</p>
+                <select id="trustPlayerSelect" aria-label="最信任的玩家"></select>
+                <select id="suspectPlayerSelect" aria-label="最怀疑的玩家"></select>
+                <input id="stanceReasonInput" class="social-reason-input" maxlength="60" placeholder="简短理由" aria-label="表态理由">
+                <button class="action-btn confirm" onclick="submitStance()">公开表态</button>
             </div>
 
             <!-- 投票阶段：同意/反对 -->
@@ -370,12 +450,24 @@
         <div id="debugPanel" class="debug-panel hidden">
             <div class="debug-header">
                 <h3>🛠️ 调试面板</h3>
-                <button class="debug-toggle" onclick="toggleDebugPanel()">▼</button>
+                <button class="debug-toggle" onclick="toggleDebugPanel()" aria-label="展开调试面板" aria-expanded="false">▼</button>
             </div>
             <div class="debug-content" id="debugContent">
                 <div class="debug-section debug-note">
                     <h4>🎮 单人调试</h4>
-                    <p>演示模式会自动补齐玩家并推进流程，你可以观察投票、小队和任务结果如何影响阵营胜负。</p>
+                    <p>单人调试会自动补齐玩家并推进流程，你可以观察投票、小队和任务结果如何影响阵营胜负。</p>
+                </div>
+
+                <div class="debug-section">
+                    <h4>🎛️ 阶段控制</h4>
+                    <div class="debug-actions">
+                        <button type="button" onclick="requestDebugState()">刷新状态</button>
+                        <button id="pauseBtn" type="button" onclick="togglePause()">⏸️ 暂停</button>
+                        <button type="button" onclick="skipPhase()">推进当前阶段</button>
+                        <button type="button" onclick="setDebugMissionResult(false)">下一任务失败</button>
+                        <button type="button" onclick="setDebugMissionResult(true)">下一任务成功</button>
+                    </div>
+                    <p class="debug-action-hint">任务结果会在下一次秘密行动结算时生效。</p>
                 </div>
 
                 <!-- AI 状态 -->
@@ -439,7 +531,7 @@
                     </div>
                     <div class="stat-item">
                         <span class="stat-label">聊天消息</span>
-                        <span class="stat-value" id="chatMessages">--</span>
+                        <span class="stat-value" id="chatMessageCount">--</span>
                     </div>
                     <div class="stat-item">
                         <span class="stat-label">AI附身次数</span>
@@ -465,9 +557,9 @@
                 </div>
             </div>
             
-            <!-- MVP评选 -->
+            <!-- 基于实际局内数据的勋章 -->
             <div class="mvp-section">
-                <h3>🏆 MVP评选</h3>
+                <h3>🏆 本局数据勋章</h3>
                 <div class="mvp-awards">
                     <div class="mvp-award">
                         <span class="mvp-icon">🎯</span>
@@ -488,8 +580,11 @@
             </div>
             
             <div class="finished-actions">
-                <button onclick="location.reload()" class="action-btn approve">► 再来一局</button>
-                <button onclick="backToHome()" class="action-btn secondary">🏠 返回首页</button>
+                <button onclick="backToHome()" class="action-btn lobby-return">
+                    <span>返回游戏大厅</span>
+                    <small>换个玩法，或加入新的房间</small>
+                </button>
+                <button onclick="requestRematch()" class="action-btn approve">► 原班再来</button>
                 <button onclick="shareResult()" class="action-btn share">📤 分享战绩</button>
             </div>
             
@@ -555,7 +650,7 @@
     <div id="toast" class="toast hidden"></div>
 
     <script src="/socket.io/socket.io.js"></script>
-    <script src="js/stage.js?v=2"></script>
-    <script src="js/game.js?v=2"></script>
+    <script src="js/stage.js?v=20260722-4"></script>
+    <script src="js/game.js?v=20260722-7"></script>
 </body>
 </html>

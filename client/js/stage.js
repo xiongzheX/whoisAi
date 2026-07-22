@@ -12,19 +12,19 @@
 //  颜色常量（与 DESIGN.md 一致）
 // ═══════════════════════════════════════
 const COLORS = {
-  bg:         '#0d0d1a',
-  panel:      '#1e1e2e',
-  blue:       '#4040ff',   // 守护者
-  red:        '#ff4040',   // 渗透者
-  green:      '#40c040',   // 侦测者
-  gray:       '#41436a',   // 未知
-  white:      '#f0f0f0',   // 名字、高光
-  yellow:     '#ffc040',   // 队长标记
-  accent:     '#ff80c0',   // 指向线
-  skin:       '#deb887',   // 皮肤
-  skinDark:   '#c8a06e',   // 皮肤暗部
-  text:       '#e0e0ff',   // 名字标签
-  textDim:    '#6a6c9a',   // 次要文字
+  bg:         '#f3ead7',
+  panel:      '#e7dfca',
+  blue:       '#7f9fba',   // 守护者
+  red:        '#c68078',   // 渗透者
+  green:      '#82a98d',   // 侦测者
+  gray:       '#98a59d',   // 未知
+  white:      '#fffaf0',   // 名字、高光
+  yellow:     '#c7a45f',   // 队长标记
+  accent:     '#ae8da4',   // 指向线
+  skin:       '#d8b58f',   // 皮肤
+  skinDark:   '#bb946f',   // 皮肤暗部
+  text:       '#354843',   // 名字标签
+  textDim:    '#7d8b84',   // 次要文字
 };
 
 // 角色 → 身体颜色映射
@@ -370,15 +370,15 @@ class PlayerStage {
     ctx.fillStyle = COLORS.skin;
     ctx.fillRect(hx, hy, 12, 12);
     // 头发
-    ctx.fillStyle = '#5a3a1a';
+    ctx.fillStyle = '#6f5542';
     ctx.fillRect(hx, hy, 12, 5);
     // 眼睛
-    ctx.fillStyle = '#000';
+    ctx.fillStyle = '#35433f';
     ctx.fillRect(hx + 3, hy + 7, 2, 2);
     ctx.fillRect(hx + 7, hy + 7, 2, 2);
 
     // 腿（2x 6x8）
-    ctx.fillStyle = '#2a2a3a';
+    ctx.fillStyle = '#59665f';
     ctx.fillRect(bx + 2, by + 20, 5, 8);
     ctx.fillRect(bx + 9, by + 20, 5, 8);
 
@@ -467,12 +467,12 @@ class PlayerStage {
 
       case 'signal_keeper':
         // 天线：竖线 + 顶部圆点
-        ctx.fillStyle = '#60ff60';
+        ctx.fillStyle = '#82b18d';
         ctx.fillRect(hx + 5, hy - 6, 2, 6);    // 天线杆
         ctx.fillRect(hx + 4, hy - 8, 4, 3);    // 天线头
         // 闪烁效果
         if (this.animFrame % 30 < 15) {
-          ctx.fillStyle = 'rgba(96,255,96,0.5)';
+          ctx.fillStyle = 'rgba(130,177,141,0.45)';
           ctx.fillRect(hx + 3, hy - 10, 6, 2);
         }
         break;

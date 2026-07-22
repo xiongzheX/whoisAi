@@ -1,0 +1,1600 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>团子相扑</title>
+  <link rel="stylesheet" href="/css/duel-room.css?v=20260722-5">
+  <style>
+    :root {
+      --ink: #263238;
+      --paper: #fff9e8;
+      --clay: #d98552;
+      --clay-dark: #a8513d;
+      --blue: #54a6d9;
+      --pink: #f26d85;
+      --leaf: #5fbf86;
+      --gold: #ffd166;
+      --line: rgba(38, 50, 56, 0.18);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      font-family: "Trebuchet MS", "Avenir Next", sans-serif;
+      background:
+        linear-gradient(90deg, rgba(38, 50, 56, 0.05) 1px, transparent 1px),
+        linear-gradient(180deg, #ffeebf 0%, #ffd6a0 52%, #f4b985 100%);
+      background-size: 34px 34px, auto;
+    }
+
+    .shell {
+      width: min(1160px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 28px 0 38px;
+    }
+
+    header {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 18px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(34px, 6vw, 72px);
+      line-height: 0.92;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      margin: 8px 0 0;
+      color: rgba(38, 50, 56, 0.72);
+      font-size: 16px;
+      font-weight: 800;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+    }
+
+    a,
+    button {
+      border-radius: 999px;
+      font: inherit;
+      font-weight: 900;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .game-link {
+      display: inline-flex;
+      min-height: 48px;
+      align-items: center;
+      justify-content: center;
+      border: 3px solid var(--ink);
+      padding: 10px 18px;
+      color: var(--ink);
+      background: rgba(255, 249, 232, 0.8);
+      box-shadow: 0 7px 0 rgba(38, 50, 56, 0.14);
+    }
+
+    button {
+      border: 0;
+      padding: 14px 22px;
+      color: #fff;
+      background: var(--ink);
+      cursor: pointer;
+      box-shadow: 0 8px 0 rgba(38, 50, 56, 0.18);
+      transition: transform 140ms ease, box-shadow 140ms ease;
+    }
+
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 0 rgba(38, 50, 56, 0.15);
+    }
+
+    button:disabled {
+      opacity: 0.58;
+      cursor: wait;
+      transform: none;
+    }
+
+    input,
+    select {
+      width: 100%;
+      border: 3px solid var(--ink);
+      border-radius: 8px;
+      padding: 10px 12px;
+      color: var(--ink);
+      background: rgba(255, 255, 255, 0.7);
+      font: inherit;
+      font-weight: 900;
+    }
+
+    label {
+      display: grid;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .stage {
+      display: grid;
+      grid-template-columns: minmax(360px, 1.05fr) minmax(330px, 0.95fr);
+      gap: 20px;
+      align-items: start;
+    }
+
+    .dohyo-wrap {
+      position: relative;
+      border: 4px solid var(--ink);
+      border-radius: 8px;
+      padding: 22px;
+      background:
+        linear-gradient(135deg, rgba(255,255,255,0.22), transparent 46%),
+        var(--clay);
+      box-shadow: 0 18px 0 rgba(38, 50, 56, 0.16);
+    }
+
+    .dohyo {
+      position: relative;
+      width: min(100%, 620px);
+      aspect-ratio: 1;
+      margin: 0 auto;
+      border: 10px solid var(--ink);
+      border-radius: 50%;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 50% 50%, rgba(255, 249, 232, 0.96) 0 72%, rgba(255, 249, 232, 0.56) 73% 78%, transparent 79%),
+        repeating-radial-gradient(circle, rgba(38,50,56,0.12) 0 2px, transparent 2px 18px),
+        linear-gradient(180deg, #e39a65, var(--clay));
+      box-shadow:
+        inset 0 0 0 12px rgba(168, 81, 61, 0.28),
+        inset 0 0 0 21px rgba(255, 249, 232, 0.28);
+    }
+
+    .dohyo::selection {
+      background: transparent;
+    }
+
+    .dohyo .environment-layer {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 1;
+      opacity: 0;
+      transition: opacity 180ms ease;
+    }
+
+    .dohyo.env-firm_ring .environment-layer {
+      opacity: 1;
+      background:
+        repeating-radial-gradient(circle, transparent 0 22px, rgba(38,50,56,0.16) 23px 25px, transparent 26px 48px);
+    }
+
+    .dohyo.env-soft_sand .environment-layer {
+      opacity: 1;
+      background:
+        radial-gradient(ellipse at 35% 45%, rgba(168, 81, 61, 0.22) 0 7%, transparent 8%),
+        radial-gradient(ellipse at 64% 58%, rgba(168, 81, 61, 0.18) 0 8%, transparent 9%),
+        repeating-radial-gradient(circle, rgba(168, 81, 61, 0.20) 0 2px, transparent 2px 10px);
+    }
+
+    .dohyo.env-tense_start .environment-layer {
+      opacity: 1;
+      background:
+        radial-gradient(circle at 50% 50%, transparent 0 24%, rgba(240, 92, 106, 0.22) 25% 37%, transparent 38%),
+        linear-gradient(90deg, transparent 0 46%, rgba(240, 92, 106, 0.26) 47% 53%, transparent 54% 100%);
+      animation: tense-pulse 760ms ease-in-out infinite alternate;
+    }
+
+    .dohyo.env-crowd_roar .environment-layer {
+      opacity: 1;
+      background:
+        radial-gradient(circle at 18% 16%, var(--gold) 0 5px, transparent 6px),
+        radial-gradient(circle at 84% 22%, var(--pink) 0 5px, transparent 6px),
+        radial-gradient(circle at 14% 82%, var(--blue) 0 5px, transparent 6px),
+        radial-gradient(circle at 82% 78%, var(--leaf) 0 5px, transparent 6px),
+        repeating-radial-gradient(circle, transparent 0 42px, rgba(255, 209, 102, 0.24) 43px 46px, transparent 47px 92px);
+      animation: crowd-thrum 720ms ease-in-out infinite alternate;
+    }
+
+    @keyframes tense-pulse {
+      from { opacity: 0.52; }
+      to { opacity: 1; }
+    }
+
+    @keyframes crowd-thrum {
+      from { opacity: 0.58; transform: scale(1); }
+      to { opacity: 1; transform: scale(1.02); }
+    }
+
+    .win-boundary {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 70%;
+      aspect-ratio: 1;
+      transform: translate(-50%, -50%);
+      border: 6px dashed var(--gold);
+      border-radius: 50%;
+      box-shadow:
+        0 0 0 4px rgba(38, 50, 56, 0.74),
+        0 0 0 12px rgba(255, 209, 102, 0.18);
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    .win-boundary::after {
+      content: "胜负线";
+      position: absolute;
+      left: 50%;
+      bottom: -16px;
+      transform: translateX(-50%);
+      border: 3px solid var(--ink);
+      border-radius: 999px;
+      padding: 3px 10px;
+      background: var(--gold);
+      font-size: 12px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .dohyo::before,
+    .dohyo::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      width: 58px;
+      height: 8px;
+      border: 2px solid var(--ink);
+      border-radius: 999px;
+      background: rgba(255, 249, 232, 0.92);
+      transform: translateY(-50%);
+      z-index: 3;
+    }
+
+    .dohyo::before {
+      left: 35%;
+    }
+
+    .dohyo::after {
+      right: 35%;
+    }
+
+    .match-banner {
+      position: absolute;
+      left: 50%;
+      top: 18px;
+      z-index: 5;
+      min-width: min(78%, 360px);
+      transform: translateX(-50%);
+      border: 3px solid var(--ink);
+      border-radius: 8px;
+      padding: 10px 14px;
+      background: rgba(255, 249, 232, 0.94);
+      box-shadow: 0 8px 0 rgba(38, 50, 56, 0.14);
+      font-size: 20px;
+      font-weight: 900;
+      text-align: center;
+    }
+
+    .match-banner.is-final {
+      background: var(--gold);
+    }
+
+    .wrestler {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: clamp(56px, 11vw, 86px);
+      height: clamp(56px, 11vw, 86px);
+      transform: translate(-50%, -50%);
+      transition: left 35ms linear, top 35ms linear, rotate 35ms linear;
+      z-index: 4;
+    }
+
+    .wrestler::before {
+      content: "";
+      position: absolute;
+      inset: 3px;
+      border: 4px solid var(--ink);
+      border-radius: 48% 48% 44% 44%;
+      background: var(--blue);
+      box-shadow: inset -10px -12px 0 rgba(0,0,0,0.08);
+    }
+
+    .wrestler.pink::before {
+      background: var(--pink);
+    }
+
+    .wrestler::after {
+      content: none;
+    }
+
+    .face {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      pointer-events: none;
+    }
+
+    .eye,
+    .mouth,
+    .brow {
+      position: absolute;
+      background: var(--ink);
+    }
+
+    .eye {
+      top: 38%;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .eye.left {
+      left: 31%;
+    }
+
+    .eye.right {
+      right: 31%;
+    }
+
+    .mouth {
+      left: 50%;
+      top: 64%;
+      width: 16px;
+      height: 5px;
+      border-radius: 999px;
+      transform: translateX(-50%);
+    }
+
+    .brow {
+      top: 30%;
+      width: 16px;
+      height: 4px;
+      border-radius: 999px;
+      opacity: 0;
+      transform-origin: center;
+    }
+
+    .brow.left {
+      left: 25%;
+    }
+
+    .brow.right {
+      right: 25%;
+    }
+
+    .wrestler.mood-strain .eye {
+      height: 5px;
+      border-radius: 999px;
+      transform: translateY(2px);
+    }
+
+    .wrestler.mood-strain .mouth {
+      width: 10px;
+      height: 10px;
+      top: 61%;
+      border-radius: 50%;
+    }
+
+    .wrestler.mood-strain .face::before {
+      content: "";
+      position: absolute;
+      right: 21%;
+      top: 24%;
+      width: 8px;
+      height: 12px;
+      border-radius: 70% 70% 70% 12%;
+      background: rgba(88, 166, 231, 0.78);
+      transform: rotate(18deg);
+    }
+
+    .wrestler.mood-angry .brow {
+      opacity: 1;
+    }
+
+    .wrestler.mood-angry .brow.left {
+      transform: rotate(18deg);
+    }
+
+    .wrestler.mood-angry .brow.right {
+      transform: rotate(-18deg);
+    }
+
+    .wrestler.mood-angry .mouth {
+      top: 65%;
+      width: 18px;
+      height: 4px;
+    }
+
+    .wrestler.mood-angry .face::after {
+      content: "";
+      position: absolute;
+      left: 21%;
+      top: 54%;
+      width: 10px;
+      height: 6px;
+      border-radius: 999px;
+      background: rgba(255, 104, 132, 0.40);
+      box-shadow: 30px 0 0 rgba(255, 104, 132, 0.40);
+    }
+
+    .wrestler.mood-happy .eye {
+      height: 5px;
+      border-radius: 999px;
+      transform: translateY(1px);
+    }
+
+    .wrestler.mood-happy .mouth {
+      top: 58%;
+      width: 20px;
+      height: 12px;
+      border: 4px solid var(--ink);
+      border-top: 0;
+      border-left-color: transparent;
+      border-right-color: transparent;
+      background: transparent;
+      border-radius: 0 0 999px 999px;
+    }
+
+    .wrestler.mood-happy .face::before {
+      content: "";
+      position: absolute;
+      right: 17%;
+      top: 15%;
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--gold);
+      box-shadow:
+        -39px 8px 0 -2px rgba(255, 209, 102, 0.82),
+        -20px -7px 0 -3px rgba(255, 209, 102, 0.78);
+    }
+
+    .wrestler.mood-shame .eye {
+      width: 6px;
+      height: 6px;
+      transform: translateY(3px);
+    }
+
+    .wrestler.mood-shame .mouth {
+      top: 66%;
+      width: 14px;
+      height: 4px;
+      transform: translateX(-50%) rotate(180deg);
+    }
+
+    .wrestler.mood-shame .face::after {
+      content: "";
+      position: absolute;
+      left: 23%;
+      top: 51%;
+      width: 8px;
+      height: 5px;
+      border-radius: 999px;
+      background: rgba(255, 104, 132, 0.52);
+      box-shadow: 28px 0 0 rgba(255, 104, 132, 0.52);
+    }
+
+    .wrestler.mood-shame .face::before {
+      content: "";
+      position: absolute;
+      right: 23%;
+      top: 42%;
+      width: 5px;
+      height: 12px;
+      border-radius: 999px;
+      background: rgba(88, 166, 231, 0.72);
+    }
+
+    .wrestler.stumble {
+      animation: wobble 180ms infinite alternate ease-in-out;
+    }
+
+    .wrestler.winner {
+      z-index: 8;
+    }
+
+    .wrestler.winner::before {
+      animation: winner-glow 620ms ease-out 2;
+      box-shadow:
+        0 0 0 8px rgba(255, 209, 102, 0.72),
+        0 0 0 16px rgba(255, 209, 102, 0.24),
+        inset -10px -12px 0 rgba(0,0,0,0.08);
+    }
+
+    .wrestler.winner .face {
+      animation: victory-hop 520ms ease-out 2;
+    }
+
+    @keyframes wobble {
+      from { rotate: -2deg; }
+      to { rotate: 3deg; }
+    }
+
+    @keyframes victory-hop {
+      0%, 100% { transform: translateY(0); }
+      45% { transform: translateY(-10px); }
+    }
+
+    @keyframes winner-glow {
+      0% { transform: scale(1); }
+      45% { transform: scale(1.08); }
+      100% { transform: scale(1); }
+    }
+
+    .hud {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .ring-result {
+      margin-top: 14px;
+      min-height: 42px;
+      border: 3px solid var(--ink);
+      border-radius: 8px;
+      padding: 8px 12px;
+      background: rgba(255, 249, 232, 0.9);
+      font-size: 20px;
+      font-weight: 900;
+    }
+
+    .ring-result.is-final {
+      background: var(--gold);
+    }
+
+    .plate,
+    .card {
+      border: 3px solid var(--ink);
+      border-radius: 8px;
+      background: rgba(255, 249, 232, 0.82);
+    }
+
+    .plate {
+      padding: 12px;
+      font-weight: 900;
+    }
+
+    .plate span {
+      display: block;
+      margin-top: 4px;
+      color: rgba(38, 50, 56, 0.66);
+      font-size: 12px;
+    }
+
+    .energy {
+      height: 12px;
+      margin-top: 10px;
+      border: 2px solid var(--ink);
+      border-radius: 999px;
+      overflow: hidden;
+      background: rgba(38, 50, 56, 0.1);
+    }
+
+    .energy i {
+      display: block;
+      width: 100%;
+      height: 100%;
+      background: var(--leaf);
+      transition: width 80ms linear;
+    }
+
+    .side {
+      display: grid;
+      gap: 16px;
+    }
+
+    .card {
+      padding: 16px;
+    }
+
+    .card h2 {
+      margin: 0 0 12px;
+      font-size: 18px;
+    }
+
+    .builder-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .points {
+      padding: 8px 12px;
+      border: 3px solid var(--ink);
+      border-radius: 999px;
+      background: var(--gold);
+      font-weight: 900;
+    }
+
+    .points.is-over {
+      color: #fff;
+      background: var(--pink);
+    }
+
+    .stat-controls {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      margin: 12px 0;
+    }
+
+    .stat-control {
+      border: 3px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      background: rgba(255,255,255,0.44);
+    }
+
+    .stat-control strong {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 13px;
+    }
+
+    .stepper {
+      display: grid;
+      grid-template-columns: 38px 1fr 38px;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .stepper button {
+      width: 38px;
+      height: 38px;
+      padding: 0;
+      border-radius: 50%;
+      box-shadow: 0 5px 0 rgba(38, 50, 56, 0.16);
+    }
+
+    .stepper span {
+      min-width: 42px;
+      padding: 8px 10px;
+      border-radius: 999px;
+      background: #fff;
+      text-align: center;
+      font-weight: 900;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-top: 10px;
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .stat {
+      border-radius: 8px;
+      padding: 8px;
+      background: rgba(255, 255, 255, 0.58);
+    }
+
+    .trait {
+      margin-top: 12px;
+      padding: 12px;
+      border-radius: 8px;
+      background: rgba(95, 191, 134, 0.24);
+      font-weight: 900;
+    }
+
+    .event-log {
+      min-height: 66px;
+      font-weight: 900;
+      color: rgba(38, 50, 56, 0.78);
+    }
+
+    .result {
+      margin-top: 10px;
+      font-size: 22px;
+      font-weight: 900;
+    }
+
+    .recap {
+      margin-top: 12px;
+      border: 3px solid var(--ink);
+      border-radius: 8px;
+      padding: 12px;
+      background: rgba(255, 249, 232, 0.9);
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .recap-title {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--ink);
+      font-size: 16px;
+    }
+
+    .recap p {
+      margin: 4px 0;
+    }
+
+    .event-log strong {
+      display: inline-block;
+      margin-right: 8px;
+      border: 2px solid var(--ink);
+      border-radius: 999px;
+      padding: 2px 8px;
+      background: var(--gold);
+      color: var(--ink);
+      font-size: 12px;
+    }
+
+    @media (max-width: 820px) {
+      header,
+      .stage {
+        display: grid;
+        grid-template-columns: 1fr;
+      }
+
+      header {
+        align-items: start;
+      }
+
+      .header-actions {
+        justify-content: start;
+      }
+
+      .dohyo-wrap {
+        padding: 14px;
+      }
+
+      .stat-controls,
+      .hud {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .stage {
+        gap: 14px;
+      }
+
+      .match-banner {
+        width: calc(100% - 34px);
+        min-width: 0;
+        max-width: none;
+        padding: 8px 10px;
+        overflow: hidden;
+        font-size: 15px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .dohyo-wrap {
+        border-width: 3px;
+        padding: 9px;
+        box-shadow: 0 10px 0 rgba(38, 50, 56, 0.14);
+      }
+
+      .dohyo {
+        border-width: 7px;
+      }
+
+      .hud {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 7px;
+        margin-top: 11px;
+      }
+
+      .plate {
+        min-width: 0;
+        padding: 8px;
+        overflow: hidden;
+        font-size: 12px;
+        text-overflow: ellipsis;
+      }
+
+      .ring-result {
+        min-height: 38px;
+        margin-top: 10px;
+        font-size: 15px;
+      }
+
+      .side {
+        gap: 12px;
+      }
+
+      .card {
+        padding: 12px;
+      }
+
+      .builder-head {
+        align-items: flex-start;
+        flex-wrap: wrap;
+      }
+
+      .points {
+        padding: 6px 9px;
+        font-size: 12px;
+      }
+
+      .stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <div>
+        <h1>团子相扑</h1>
+        <p class="subtitle">1v1 可爱竞技，五秒内推出圈或裁判判定。</p>
+      </div>
+      <div class="header-actions">
+        <a class="game-link" href="/games/bean-sprint/">豆豆百米赛</a>
+        <a class="game-link" href="/">返回大厅</a>
+        <button id="fightBtn" type="button" disabled>提交配置并准备</button>
+      </div>
+    </header>
+
+    <section class="duel-room-dock" aria-label="双人房间">
+      <div class="duel-room-fields">
+        <label>你的昵称<input id="duelPlayerName" maxlength="10" autocomplete="nickname"></label>
+        <label>邀请码<input id="duelRoomId" placeholder="加入朋友房间时填写" maxlength="20" autocomplete="off"></label>
+      </div>
+      <div class="duel-room-actions">
+        <button id="createDuelBtn" type="button">快速开房</button>
+        <button id="joinDuelBtn" type="button" class="is-secondary">按邀请码加入</button>
+        <div id="joinedDuelActions" class="duel-joined-actions hidden">
+          <button id="shareDuelBtn" type="button">复制邀请链接</button>
+          <button id="leaveDuelBtn" type="button" class="is-danger">离开房间</button>
+        </div>
+      </div>
+      <div class="duel-room-status">
+        <span id="duelStatusText">先进房，再配好力士等对手。</span>
+        <div id="duelSeats" class="duel-seats" aria-live="polite"></div>
+      </div>
+      <button id="cancelReadyBtn" class="duel-cancel-ready hidden" type="button">取消准备，继续调整</button>
+    </section>
+
+    <nav class="post-match-actions hidden" id="postMatchActions" aria-label="本局结束后操作">
+      <a class="post-match-lobby" href="/">
+        <strong>返回游戏大厅</strong>
+        <small>换个玩法，或加入新的房间</small>
+      </a>
+      <button class="post-match-rematch" id="postMatchRematch" type="button">
+        <strong>调整配置再来一局</strong>
+        <small>调整力士配置后重新准备</small>
+      </button>
+    </nav>
+
+    <section class="stage">
+      <div class="dohyo-wrap">
+        <div class="dohyo" aria-label="sumo replay">
+          <div class="match-banner" id="matchBanner">等待开局</div>
+          <div class="environment-layer" aria-hidden="true"></div>
+          <div class="win-boundary" aria-hidden="true"></div>
+          <div class="wrestler blue mood-focus" id="wrestlerA">
+            <span class="face" aria-hidden="true">
+              <i class="brow left"></i><i class="brow right"></i>
+              <i class="eye left"></i><i class="eye right"></i><i class="mouth"></i>
+            </span>
+          </div>
+          <div class="wrestler pink mood-focus" id="wrestlerB">
+            <span class="face" aria-hidden="true">
+              <i class="brow left"></i><i class="brow right"></i>
+              <i class="eye left"></i><i class="eye right"></i><i class="mouth"></i>
+            </span>
+          </div>
+        </div>
+        <div class="hud">
+          <div class="plate" id="plateA">团团<span>等待中</span><div class="energy"><i id="energyA"></i></div></div>
+          <div class="plate" id="plateB">圆圆<span>等待中</span><div class="energy"><i id="energyB"></i></div></div>
+        </div>
+        <div class="ring-result" id="ringResult">擂台已准备。</div>
+      </div>
+
+      <div class="side">
+        <article class="card">
+          <div class="builder-head">
+            <h2>创建力士</h2>
+            <div class="points" id="pointsBadge">点数 36 / 36</div>
+          </div>
+          <label>
+            名字
+            <input id="wrestlerName" maxlength="20" value="">
+          </label>
+          <div class="stat-controls" id="statControls"></div>
+          <label>
+            流派
+            <select id="styleSelect">
+              <option value="balanced" selected>均衡</option>
+              <option value="aggressive">猛推</option>
+              <option value="defensive">稳守</option>
+              <option value="trickster">灵巧</option>
+            </select>
+          </label>
+          <div class="trait" id="createdTrait">天赋：入场时随机生成</div>
+          <div class="trait" id="environmentBadge">场地：开推后生成</div>
+        </article>
+
+        <article class="card">
+          <h2 id="cardTitleA">团团</h2>
+          <div class="stats" id="statsA"></div>
+        </article>
+
+        <article class="card">
+          <h2 id="cardTitleB">对手席</h2>
+          <div class="stats" id="statsB"></div>
+        </article>
+
+        <article class="card">
+          <div class="event-log" id="eventLog">擂台已准备。</div>
+          <div class="result" id="result"></div>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/duel-room.js?v=20260721-3"></script>
+  <script>
+    const fightBtn = document.getElementById('fightBtn');
+    const dohyo = document.querySelector('.dohyo');
+    const wrestlerA = document.getElementById('wrestlerA');
+    const wrestlerB = document.getElementById('wrestlerB');
+    const plateA = document.getElementById('plateA');
+    const plateB = document.getElementById('plateB');
+    const energyA = document.getElementById('energyA');
+    const energyB = document.getElementById('energyB');
+    const matchBanner = document.getElementById('matchBanner');
+    const ringResult = document.getElementById('ringResult');
+    const statsA = document.getElementById('statsA');
+    const statsB = document.getElementById('statsB');
+    const eventLog = document.getElementById('eventLog');
+    const resultBox = document.getElementById('result');
+    const postMatchActions = document.getElementById('postMatchActions');
+    const postMatchRematch = document.getElementById('postMatchRematch');
+    const statControls = document.getElementById('statControls');
+    const pointsBadge = document.getElementById('pointsBadge');
+    const wrestlerName = document.getElementById('wrestlerName');
+    const styleSelect = document.getElementById('styleSelect');
+    const createdTrait = document.getElementById('createdTrait');
+    const environmentBadge = document.getElementById('environmentBadge');
+    const cardTitleA = document.getElementById('cardTitleA');
+    const cardTitleB = document.getElementById('cardTitleB');
+    const duelPlayerName = document.getElementById('duelPlayerName');
+    const duelRoomId = document.getElementById('duelRoomId');
+    const joinDuelBtn = document.getElementById('joinDuelBtn');
+    const createDuelBtn = document.getElementById('createDuelBtn');
+    const joinedDuelActions = document.getElementById('joinedDuelActions');
+    const shareDuelBtn = document.getElementById('shareDuelBtn');
+    const leaveDuelBtn = document.getElementById('leaveDuelBtn');
+    const cancelReadyBtn = document.getElementById('cancelReadyBtn');
+    const duelStatusText = document.getElementById('duelStatusText');
+    const duelSeats = document.getElementById('duelSeats');
+    const duelRoomDock = document.querySelector('.duel-room-dock');
+    prefillDuelRoomFromQuery(duelRoomId);
+    duelPlayerName.value = suggestedDuelPlayerName();
+    wrestlerName.value = `${duelPlayerName.value}团`;
+    let lastPlayedSessionId = '';
+    let currentDuelState = null;
+    let currentDuelPlayerId = '';
+    let replayPlaying = false;
+
+    const duelClient = createDuelRoomClient({
+      gameId: 'dumpling-sumo',
+      onConnection(connected) {
+        if (!connected) {
+          duelStatusText.textContent = '连接断开，正在重连…';
+          fightBtn.disabled = true;
+        }
+      },
+      onJoined({ roomId }) {
+        duelRoomId.value = roomId;
+        setRoomIdentityLocked(true);
+        duelStatusText.textContent = `房间 ${roomId} · 配好力士后点准备`;
+        const url = new URL(location.href);
+        url.searchParams.set('room', roomId);
+        url.searchParams.delete('intent');
+        history.replaceState(null, '', url);
+        updatePreview();
+      },
+      onState(state, playerId) {
+        currentDuelState = state;
+        currentDuelPlayerId = playerId;
+        renderDuelRoomState(state, playerId);
+        if (state.result && state.sessionId && state.sessionId !== lastPlayedSessionId) {
+          lastPlayedSessionId = state.sessionId;
+          replayPlaying = true;
+          renderDuelRoomState(state, playerId);
+          playDuelResult(state.result).finally(() => {
+            replayPlaying = false;
+            renderDuelRoomState(currentDuelState, currentDuelPlayerId);
+          });
+        }
+      },
+      onLeft() {
+        currentDuelState = null;
+        currentDuelPlayerId = '';
+        replayPlaying = false;
+        postMatchActions.classList.add('hidden');
+        setRoomIdentityLocked(false);
+        duelRoomId.value = '';
+        duelSeats.innerHTML = '';
+        duelStatusText.textContent = '已离开房间，可以重新开房或加入。';
+        fightBtn.disabled = true;
+        setConfigLocked(false);
+      },
+      onError(message) {
+        duelStatusText.textContent = message;
+        joinDuelBtn.disabled = false;
+        joinDuelBtn.textContent = '按邀请码加入';
+        createDuelBtn.disabled = false;
+        createDuelBtn.textContent = '快速开房';
+        fightBtn.disabled = !duelClient.isJoined() || statTotal() > 36;
+      }
+    });
+
+    function renderDuelRoomState(state, playerId) {
+      duelSeats.innerHTML = state.players.map((player) => {
+        const classes = ['duel-seat'];
+        if (player.id === playerId) classes.push('is-me');
+        if (player.ready && state.phase !== 'finished') classes.push('is-ready');
+        if (player.connectionStatus !== 'online') classes.push('is-offline');
+        const suffix = player.id === playerId ? '（你）' : '';
+        const role = player.isHost ? '<small>房主</small>' : '';
+        const status = player.connectionStatus !== 'online'
+          ? '· 离线'
+          : state.phase === 'finished'
+            ? '· 本局完成'
+            : player.ready ? '· 已准备' : '· 配置中';
+        return `<span class="${classes.join(' ')}">${escapeHTML(player.name)}${suffix}${role}<em>${status}</em></span>`;
+      }).join('');
+      const prompt = duelReadinessPrompt(state, playerId);
+      const me = prompt.me;
+      const canChooseNextStep = state.phase === 'finished' && state.sessionId === lastPlayedSessionId && !replayPlaying;
+      const postMatchWasHidden = postMatchActions.classList.contains('hidden');
+      postMatchActions.classList.toggle('hidden', !canChooseNextStep);
+      if (canChooseNextStep && postMatchWasHidden) {
+        requestAnimationFrame(() => postMatchActions.scrollIntoView({
+          behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+          block: 'nearest'
+        }));
+      }
+      const configurationFrozen = state.phase === 'configuring' && Boolean(me?.ready);
+      fightBtn.disabled = !duelClient.isJoined() || !prompt.bothPresent || statTotal() > 36 || configurationFrozen || state.phase === 'running' || replayPlaying;
+      setConfigLocked(configurationFrozen || state.phase === 'running' || replayPlaying);
+      cancelReadyBtn.classList.toggle('hidden', !configurationFrozen);
+      const callToReady = prompt.needsReady && !fightBtn.disabled;
+      fightBtn.classList.toggle('duel-ready-callout', callToReady);
+      document.body.classList.toggle('has-duel-callout', callToReady);
+      duelRoomDock.classList.toggle('is-action-required', callToReady);
+      duelStatusText.parentElement.classList.toggle('is-action-required', callToReady);
+      fightBtn.textContent = replayPlaying
+        ? '比赛回放中…'
+        : state.phase === 'finished'
+        ? '提交配置，准备下一局'
+        : me?.ready
+          ? '已准备 · 等对手'
+          : prompt.opponentReady
+            ? '对手已准备 · 轮到你！'
+            : prompt.bothPresent
+              ? '两人到齐 · 提交配置并准备'
+              : '提交配置并准备';
+      if (replayPlaying) {
+        duelStatusText.textContent = `第 ${state.round} 局正在回放，看完后可以再来一局。`;
+      } else if (!prompt.bothPresent) {
+        duelStatusText.textContent = '已进房，等待第二名玩家。';
+      } else if (state.phase === 'finished') {
+        duelStatusText.textContent = `第 ${state.round} 局已结束，可以重新配点再来。`;
+      } else if (state.players.every((player) => player.ready)) {
+        duelStatusText.textContent = '双方已准备，正在生成同一场比赛…';
+      } else if (me?.ready) {
+        duelStatusText.textContent = '你已准备，等待对手提交配置。';
+      } else if (prompt.opponentReady) {
+        duelStatusText.textContent = '对手已经准备好，点击醒目按钮就能开赛。';
+      } else {
+        duelStatusText.textContent = '两人已到齐，配置确认后点击醒目按钮准备。';
+      }
+    }
+
+    const ringRadius = 10;
+    const traitNames = {
+      iron_feet: '铁脚掌',
+      bull_rush: '蛮牛冲',
+      low_center: '低重心',
+      counter_grip: '反手抓',
+      soft_step: '软步',
+      big_roar: '大吼',
+      lucky_belly: '幸运肚皮',
+      calm_breath: '沉稳呼吸'
+    };
+    const traitDescriptions = {
+      iron_feet: '抗推更稳，适合守住胜负线',
+      bull_rush: '开局推力更猛，但后段更怕被反制',
+      low_center: '降低滑倒风险，边缘更容易站住',
+      counter_grip: '落在外侧时更容易反手找机会',
+      soft_step: '横向步法更灵活，容易绕开力量',
+      big_roar: '中段气势爆发，短时间推力提升',
+      lucky_belly: '偶尔肚皮弹反，制造意外波动',
+      calm_breath: '体力更厚，越拖越有价值'
+    };
+    const eventLabels = {
+      counter_agile: '反制',
+      counter_power: '破势',
+      counter_endurance: '消耗',
+      counter_spirit: '气势',
+      counter_guard: '卡位',
+      rally: '反扑',
+      edge_turn: '回身',
+      finish_push: '决胜',
+      near_throw: '压制',
+      roar: '气势',
+      lucky: '弹反',
+      stumble: '失衡'
+    };
+    const eventDescriptions = {
+      counter_agile: '灵巧型借力，让力量型短暂失衡',
+      counter_power: '力量型打断对方节奏',
+      counter_endurance: '消耗型拖住对手体力',
+      counter_spirit: '气势型压开防守空隙',
+      counter_guard: '稳守型扎根，压制绕步',
+      rally: '落后方憋住一口气反推',
+      edge_turn: '边缘稳住后回身借力',
+      finish_push: '最后连续推出，锁定胜负',
+      near_throw: '一方压住重心，制造危机',
+      roar: '大吼触发中段爆发',
+      lucky: '幸运肚皮造成意外弹反',
+      stumble: '脚步出错，短时间变弱'
+    };
+    const statLabels = {
+      power: '力量',
+      weight: '体重',
+      balance: '平衡',
+      footwork: '步法',
+      stamina: '体力',
+      spirit: '气势'
+    };
+    const reasonLabels = {
+      ring_out: '推出圈',
+      edge_tiebreak: '边缘判定',
+      judge: '裁判判定'
+    };
+    const environmentNames = {
+      firm_ring: '硬实土俵',
+      soft_sand: '松软沙地',
+      tense_start: '紧张开局',
+      crowd_roar: '满场欢呼'
+    };
+    const environmentDescriptions = {
+      firm_ring: '体重和平衡更稳',
+      soft_sand: '步法更重要，也更容易滑',
+      tense_start: '开局气势更关键',
+      crowd_roar: '后段气势更容易爆发'
+    };
+    const archetypeNames = {
+      power: '力量型',
+      guard: '稳守型',
+      agile: '灵巧型',
+      spirit: '气势型',
+      endurance: '消耗型',
+      balanced: '均衡型'
+    };
+    const userStats = {
+      power: 8,
+      weight: 7,
+      balance: 6,
+      footwork: 5,
+      stamina: 5,
+      spirit: 5
+    };
+    const defaultRival = {
+      name: '圆圆',
+      stats: { power: 6, weight: 8, balance: 8, footwork: 4, stamina: 5, spirit: 5 },
+      style: 'defensive'
+    };
+
+    function randomSeed() {
+      return Math.floor(Math.random() * 1_000_000_000);
+    }
+
+    function cleanName() {
+      return wrestlerName.value.trim() || `${duelPlayerName.value.trim()}团`;
+    }
+
+    function setRoomIdentityLocked(locked) {
+      duelPlayerName.disabled = locked;
+      duelRoomId.disabled = locked;
+      createDuelBtn.classList.toggle('hidden', locked);
+      joinDuelBtn.classList.toggle('hidden', locked);
+      joinedDuelActions.classList.toggle('hidden', !locked);
+      if (!locked) {
+        createDuelBtn.disabled = false;
+        createDuelBtn.textContent = '快速开房';
+        joinDuelBtn.disabled = false;
+        joinDuelBtn.textContent = '按邀请码加入';
+      }
+    }
+
+    function setConfigLocked(locked) {
+      wrestlerName.disabled = locked;
+      styleSelect.disabled = locked;
+      statControls.querySelectorAll('button').forEach(button => { button.disabled = locked; });
+      document.querySelector('.side')?.classList.toggle('is-config-locked', locked);
+    }
+
+    function statTotal() {
+      return Object.values(userStats).reduce((sum, value) => sum + value, 0);
+    }
+
+    function renderControls() {
+      statControls.innerHTML = Object.entries(userStats).map(([key, value]) => `
+        <div class="stat-control">
+          <strong>${statLabels[key]}</strong>
+          <div class="stepper">
+            <button type="button" data-stat="${key}" data-delta="-1" aria-label="${statLabels[key]} 减少">−</button>
+            <span>${value}</span>
+            <button type="button" data-stat="${key}" data-delta="1" aria-label="${statLabels[key]} 增加">+</button>
+          </div>
+        </div>
+      `).join('');
+      updatePreview();
+    }
+
+    function renderStats(node, wrestler) {
+      node.innerHTML = Object.entries(wrestler.stats).map(([key, value]) => (
+        `<div class="stat">${statLabels[key]} ${value}</div>`
+      )).join('');
+    }
+
+    function updatePreview() {
+      const total = statTotal();
+      const name = cleanName();
+      pointsBadge.textContent = `点数 ${total} / 36`;
+      pointsBadge.classList.toggle('is-over', total > 36);
+      const me = currentDuelState?.players.find((player) => player.id === duelClient.playerId());
+      const frozen = currentDuelState?.phase === 'configuring' && Boolean(me?.ready);
+      const bothPresent = duelReadinessPrompt(currentDuelState, duelClient.playerId()).bothPresent;
+      fightBtn.disabled = total > 36 || !duelClient.isJoined() || !bothPresent || frozen || currentDuelState?.phase === 'running' || replayPlaying;
+      cardTitleA.textContent = name;
+      setPlate(plateA, name, '等待中');
+      setPlate(plateB, '对手席', '等待进房');
+      renderStats(statsA, { stats: userStats });
+      statsB.innerHTML = '<div class="stat">等待对手提交配置</div>';
+      cardTitleB.textContent = '对手席';
+      setPosition(wrestlerA, -2.2, 0);
+      setPosition(wrestlerB, 2.2, 0);
+      setEnergy(energyA, 1);
+      setEnergy(energyB, 1);
+      setEnvironmentClass(dohyo, null);
+      ringResult.textContent = '擂台已准备。';
+      environmentBadge.textContent = '场地：开推后生成';
+      ringResult.classList.remove('is-final');
+      matchBanner.textContent = '等待开局';
+      matchBanner.classList.remove('is-final');
+      wrestlerA.classList.remove('stumble', 'winner');
+      wrestlerB.classList.remove('stumble', 'winner');
+      setMood(wrestlerA, 'focus');
+      setMood(wrestlerB, 'focus');
+    }
+
+    function setPlate(node, name, detail) {
+      const energy = node.querySelector('.energy');
+      node.innerHTML = `${name}<span>${detail}</span>`;
+      node.appendChild(energy);
+    }
+
+    function setPosition(node, x, y) {
+      const left = 50 + (x / ringRadius) * 43;
+      const top = 50 + (y / ringRadius) * 43;
+      node.style.left = `${Math.max(0, Math.min(100, left))}%`;
+      node.style.top = `${Math.max(0, Math.min(100, top))}%`;
+    }
+
+    function setEnergy(node, value) {
+      node.style.width = `${Math.max(0, Math.min(1, value)) * 100}%`;
+    }
+
+    async function postJSON(path, body) {
+      const response = await fetch(path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || response.statusText);
+      }
+      return response.json();
+    }
+
+    async function startFight() {
+      if (statTotal() > 36) {
+        eventLog.textContent = '点数超过 36 了。';
+        return;
+      }
+      fightBtn.disabled = true;
+      resultBox.textContent = '';
+      setEnvironmentClass(dohyo, null);
+      ringResult.textContent = '双方入场...';
+      environmentBadge.textContent = '场地：生成中...';
+      ringResult.classList.remove('is-final');
+      matchBanner.textContent = '双方入场...';
+      matchBanner.classList.remove('is-final');
+      eventLog.textContent = '双方入场...';
+      wrestlerA.classList.remove('stumble', 'winner');
+      wrestlerB.classList.remove('stumble', 'winner');
+      setMood(wrestlerA, 'focus');
+      setMood(wrestlerB, 'focus');
+
+      try {
+        duelClient.ready({
+          name: cleanName(),
+          stats: { ...userStats },
+          style: styleSelect.value
+        });
+        eventLog.textContent = '配置已提交，等对手准备…';
+      } catch (error) {
+        eventLog.textContent = '准备失败：' + error.message;
+        fightBtn.disabled = false;
+      }
+    }
+
+    async function playDuelResult(result) {
+      const [blue, pink] = result.players || [];
+      const match = result.match;
+      if (!blue || !pink || !match) return;
+      renderStats(statsA, blue);
+      renderStats(statsB, pink);
+      cardTitleA.textContent = blue.name;
+      cardTitleB.textContent = pink.name;
+      setPlate(plateA, blue.name, wrestlerDetail(blue, match.archetypeA));
+      setPlate(plateB, pink.name, wrestlerDetail(pink, match.archetypeB));
+      const mine = blue.id === duelClient.playerId() ? { wrestler: blue, archetype: match.archetypeA } :
+        pink.id === duelClient.playerId() ? { wrestler: pink, archetype: match.archetypeB } : null;
+      if (mine) {
+        createdTrait.textContent = `你的天赋：${traitLabel(mine.wrestler.trait)} · ${traitDescription(mine.wrestler.trait)} · 风格：${archetypeLabel(mine.archetype)}`;
+      }
+      setEnvironmentClass(dohyo, match.environment);
+      environmentBadge.textContent = `场地：${environmentLabel(match.environment)}`;
+      await playReplay(match, blue, pink);
+    }
+
+    function playReplay(match, blue, pink) {
+      return new Promise((resolve) => {
+        const frames = match.frames || [];
+        const events = match.events || [];
+        let frameIndex = 0;
+        let eventIndex = 0;
+        const moodUntil = { a: null, b: null };
+        eventLog.textContent = `哈！开推！${environmentLabel(match.environment)}`;
+        matchBanner.textContent = environmentNames[match.environment] || '哈！开推！';
+
+        const timer = setInterval(() => {
+          const frame = frames[frameIndex];
+          if (!frame) {
+            clearInterval(timer);
+            wrestlerA.classList.remove('stumble');
+            wrestlerB.classList.remove('stumble');
+            const winnerName = match.winner === blue.id ? blue.name : pink.name;
+            const finalText = `胜者：${winnerName} · ${reasonLabels[match.reason] || '获胜'}`;
+            matchBanner.textContent = finalText;
+            matchBanner.classList.add('is-final');
+            ringResult.textContent = finalText;
+            ringResult.classList.add('is-final');
+            resultBox.innerHTML = `${escapeHTML(finalText)}${sumoRecap(match, blue, pink)}`;
+            const winnerNode = match.winner === blue.id ? wrestlerA : wrestlerB;
+            const loserNode = match.winner === blue.id ? wrestlerB : wrestlerA;
+            winnerNode.classList.add('winner');
+            setMood(winnerNode, 'happy');
+            setMood(loserNode, 'shame');
+            resolve();
+            return;
+          }
+
+          setPosition(wrestlerA, frame.a.x, frame.a.y);
+          setPosition(wrestlerB, frame.b.x, frame.b.y);
+          setEnergy(energyA, frame.a.energy / 120);
+          setEnergy(energyB, frame.b.energy / 120);
+          wrestlerA.classList.toggle('stumble', frame.a.stumbling);
+          wrestlerB.classList.toggle('stumble', frame.b.stumbling);
+          applyFrameMood(wrestlerA, frame.a, frame.tick, moodUntil.a);
+          applyFrameMood(wrestlerB, frame.b, frame.tick, moodUntil.b);
+
+          while (events[eventIndex] && events[eventIndex].tick <= frame.tick) {
+            const event = events[eventIndex];
+            const who = event.wrestler === blue.id ? blue.name : pink.name;
+            eventLog.innerHTML = eventText(event.type, who, event.message);
+            const actorKey = event.wrestler === blue.id ? 'a' : 'b';
+            const actorNode = actorKey === 'a' ? wrestlerA : wrestlerB;
+            const otherNode = actorKey === 'a' ? wrestlerB : wrestlerA;
+            const actorMood = eventMood(event.type, event.message);
+            setMood(actorNode, actorMood);
+            moodUntil[actorKey] = { mood: actorMood, until: event.tick + 12 };
+            if (event.type.startsWith('counter_') || event.type === 'finish_push' || event.type === 'edge_turn') {
+              const otherKey = actorKey === 'a' ? 'b' : 'a';
+              setMood(otherNode, 'shame');
+              moodUntil[otherKey] = { mood: 'shame', until: event.tick + 8 };
+            }
+            eventIndex++;
+          }
+
+          frameIndex++;
+        }, 42);
+      });
+    }
+
+    function applyFrameMood(node, frame, tick, lockedMood) {
+      if (lockedMood && tick <= lockedMood.until) {
+        setMood(node, lockedMood.mood);
+        return;
+      }
+      if (frame.stumbling) {
+        setMood(node, 'shame');
+        return;
+      }
+      if (frame.energy < 58) {
+        setMood(node, 'strain');
+        return;
+      }
+      setMood(node, 'focus');
+    }
+
+    function eventMood(type, message) {
+      if (type === 'lucky') return 'happy';
+      if (type === 'roar' || type.startsWith('counter_')) return 'angry';
+      if (type === 'rally' || type === 'finish_push' || type === 'edge_turn') return 'strain';
+      if (type === 'near_throw') return 'angry';
+      if (type === 'stumble') return 'shame';
+      return message.includes('推出') ? 'strain' : 'focus';
+    }
+
+    function setMood(node, mood) {
+      node.classList.remove('mood-focus', 'mood-strain', 'mood-angry', 'mood-happy', 'mood-shame');
+      node.classList.add(`mood-${mood}`);
+    }
+
+    function traitLabel(trait) {
+      return traitNames[trait] || trait;
+    }
+
+    function traitDescription(trait) {
+      return traitDescriptions[trait] || '带来特殊比赛波动';
+    }
+
+    function eventText(type, who, message) {
+      const label = eventLabels[type] || '事件';
+      const detail = eventDescriptions[type];
+      const suffix = detail ? ` · ${detail}` : '';
+      return `<strong>${escapeHTML(label)}</strong>${escapeHTML(who)}：${escapeHTML(message)}${escapeHTML(suffix)}`;
+    }
+
+    function environmentLabel(environment) {
+      const name = environmentNames[environment] || environment || '未知场地';
+      const description = environmentDescriptions[environment];
+      return description ? `${name} · ${description}` : name;
+    }
+
+    function wrestlerDetail(wrestler, archetype) {
+      return `${traitNames[wrestler.trait] || wrestler.trait} · ${archetypeLabel(archetype)}`;
+    }
+
+    function archetypeLabel(archetype) {
+      return archetypeNames[archetype] || archetype || '未知型';
+    }
+
+    function sumoRecap(match, blue, pink) {
+      const winner = match.winner === blue.id ? blue : pink;
+      const loser = match.winner === blue.id ? pink : blue;
+      const winnerArchetype = match.winner === blue.id ? match.archetypeA : match.archetypeB;
+      const loserArchetype = match.winner === blue.id ? match.archetypeB : match.archetypeA;
+      const keyEvent = strongestSumoEvent(match.events || [], winner.id);
+      const stat = bestSumoStat(winner.stats);
+      const traitLine = `${winner.name} 的「${traitLabel(winner.trait)}」${traitDescription(winner.trait)}。`;
+      const styleLine = `${archetypeLabel(winnerArchetype)} 对上 ${archetypeLabel(loserArchetype)}，胜负关键落在${statLabels[stat]}和站位变化。`;
+      const keyLine = keyEvent ? `关键转折是 ${keyEvent.time.toFixed(2)}s 的「${keyEvent.message}」。` : `${winner.name} 没有明显失衡，靠持续压制拿下。`;
+      const adviceLine = `${loser.name} 下一局可以补强${statLabels[bestSumoStat(loser.stats)]}，或换流派争取更容易触发反制。`;
+      return `<div class="recap"><strong class="recap-title">赛后复盘</strong><p>${escapeHTML(traitLine)}</p><p>${escapeHTML(styleLine)}</p><p>${escapeHTML(keyLine)}</p><p>${escapeHTML(adviceLine)}</p></div>`;
+    }
+
+    function strongestSumoEvent(events, winnerId) {
+      const priority = ['finish_push', 'edge_turn', 'rally', 'counter_agile', 'counter_power', 'counter_endurance', 'counter_spirit', 'counter_guard', 'lucky', 'roar', 'near_throw', 'stumble'];
+      return priority
+        .map(type => events.find(event => event.type === type && (event.wrestler === winnerId || type === 'near_throw' || type === 'stumble')))
+        .find(Boolean);
+    }
+
+    function bestSumoStat(stats) {
+      return Object.entries(stats).sort((a, b) => b[1] - a[1])[0][0];
+    }
+
+    function escapeHTML(value) {
+      return String(value).replace(/[&<>"']/g, char => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      })[char]);
+    }
+
+    function setEnvironmentClass(node, environment) {
+      node.classList.remove('env-firm_ring', 'env-soft_sand', 'env-tense_start', 'env-crowd_roar');
+      if (environment) {
+        node.classList.add(`env-${environment}`);
+      }
+    }
+
+    statControls.addEventListener('click', (event) => {
+      const button = event.target.closest('button[data-stat]');
+      if (!button) return;
+      const key = button.dataset.stat;
+      const delta = Number(button.dataset.delta);
+      const next = Math.max(1, Math.min(10, userStats[key] + delta));
+      if (next === userStats[key]) return;
+      userStats[key] = next;
+      renderControls();
+    });
+    wrestlerName.addEventListener('input', updatePreview);
+    styleSelect.addEventListener('change', updatePreview);
+    joinDuelBtn.addEventListener('click', () => {
+      if (!duelRoomId.value.trim()) {
+        duelStatusText.textContent = '请先输入邀请码。';
+        duelRoomId.focus();
+        return;
+      }
+      joinDuelBtn.disabled = true;
+      joinDuelBtn.textContent = '进房中…';
+      duelClient.join(duelRoomId.value, duelPlayerName.value);
+    });
+    createDuelBtn.addEventListener('click', () => {
+      createDuelBtn.disabled = true;
+      createDuelBtn.textContent = '开房中…';
+      duelClient.create(duelPlayerName.value);
+    });
+    shareDuelBtn.addEventListener('click', async () => {
+      const inviteURL = new URL(location.pathname, location.origin);
+      inviteURL.searchParams.set('room', duelRoomId.value);
+      try {
+        await navigator.clipboard.writeText(inviteURL.toString());
+        shareDuelBtn.textContent = '链接已复制';
+      } catch (error) {
+        console.error('复制邀请链接失败', error);
+        shareDuelBtn.textContent = '复制失败';
+      }
+      setTimeout(() => { shareDuelBtn.textContent = '复制邀请链接'; }, 1400);
+    });
+    leaveDuelBtn.addEventListener('click', () => duelClient.leave());
+    cancelReadyBtn.addEventListener('click', () => duelClient.cancelReady());
+    duelPlayerName.addEventListener('input', () => {
+      if (!wrestlerName.dataset.customized) wrestlerName.value = `${duelPlayerName.value.trim()}团`;
+      updatePreview();
+    });
+    wrestlerName.addEventListener('input', () => { wrestlerName.dataset.customized = 'true'; });
+    postMatchRematch.addEventListener('click', () => {
+      document.querySelector('.side')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      wrestlerName.focus({ preventScroll: true });
+    });
+    fightBtn.addEventListener('click', startFight);
+    renderControls();
+    if (new URLSearchParams(location.search).get('intent') === 'create') {
+      requestAnimationFrame(() => createDuelBtn.click());
+    }
+  </script>
+</body>
+</html>

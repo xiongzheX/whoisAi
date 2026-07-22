@@ -2,6 +2,8 @@ module whoisai
 
 go 1.24
 
+require runner_race v0.0.0
+
 require (
 	github.com/andybalholm/brotli v1.0.5 // indirect
 	github.com/gookit/color v1.5.4 // indirect
@@ -18,3 +20,5 @@ require (
 	golang.org/x/sys v0.13.0 // indirect
 	golang.org/x/text v0.13.0 // indirect
 )
+
+replace runner_race => ./runner_race

@@ -1,0 +1,1148 @@
+/*
+ * 谁是 AI · 轻松桌游主题
+ * 奶油纸张为主背景，用低饱和珊瑚、薄荷、雾蓝与芥末黄区分信息。
+ */
+
+:root {
+  --bg: #f3ead7;
+  --bg-panel: #fffaf0;
+  --bg-card: #e9efe5;
+  --accent: #cb806e;
+  --accent-glow: #dc9a88;
+  --good: #7fa68c;
+  --good-dark: #6f927c;
+  --bad: #c47d74;
+  --bad-dark: #a86762;
+  --gold: #c3a05f;
+  --text: #354843;
+  --text-main: #354843;
+  --text-dim: #74817a;
+  --text-dark: #2f413c;
+  --border: #cbd1c5;
+  --cyan: #739daf;
+  --pixel-font: "Yuanti SC", "Hiragino Maru Gothic ProN", "Avenir Next Rounded", "PingFang SC", sans-serif;
+  --radius-sm: 9px;
+  --radius: 13px;
+  --radius-md: 15px;
+  --radius-lg: 21px;
+  --soft-paper: #fffaf0;
+  --soft-cream: #f3ead7;
+  --soft-ink: #354843;
+  --soft-muted: #74817a;
+  --soft-coral: #cb806e;
+  --soft-mint: #9cbca7;
+  --soft-blue: #9ab9c8;
+  --soft-yellow: #d2b773;
+  --soft-lilac: #aaa5bd;
+  --soft-shadow: rgba(61, 75, 67, 0.13);
+}
+
+body,
+button,
+input,
+select,
+textarea {
+  font-family: var(--pixel-font);
+}
+
+body::after {
+  display: none !important;
+}
+
+#waitingScreen *,
+#gameScreen *,
+#finishedScreen *,
+.help-panel *,
+.tutorial-panel * {
+  text-shadow: none !important;
+}
+
+body[data-screen="waitingScreen"],
+body[data-screen="gameScreen"],
+body[data-screen="finishedScreen"] {
+  color: var(--soft-ink);
+  background: var(--soft-cream);
+}
+
+.connection-status {
+  border: 1px solid rgba(53, 72, 67, 0.16);
+  border-radius: 999px;
+  color: var(--soft-paper);
+  font-weight: 700;
+  box-shadow: 0 5px 14px rgba(53, 72, 67, 0.12);
+}
+
+.connection-status.connected {
+  background: #729b82;
+}
+
+.connection-status.connecting,
+.connection-status.reconnecting {
+  color: var(--soft-ink);
+  background: #d1b876;
+}
+
+.connection-status.disconnected {
+  background: #b86f69;
+}
+
+/* 等待室：像坐到一张铺着彩色卡牌的桌边。 */
+#waitingScreen {
+  position: relative;
+  justify-content: flex-start;
+  min-height: 100vh;
+  overflow: hidden;
+  padding: 72px 24px 40px;
+  color: var(--soft-ink);
+  background:
+    radial-gradient(circle at 9% 8%, rgba(210, 183, 115, 0.38), transparent 25%),
+    radial-gradient(circle at 88% 13%, rgba(154, 185, 200, 0.36), transparent 28%),
+    radial-gradient(circle at 80% 88%, rgba(203, 128, 110, 0.22), transparent 30%),
+    linear-gradient(145deg, #f8efd9 0%, #e6efdc 52%, #dceaf0 100%);
+}
+
+#waitingScreen::before,
+#waitingScreen::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  border: 2px solid rgba(53, 72, 67, 0.08);
+  border-radius: 46% 54% 50% 45%;
+}
+
+#waitingScreen::before {
+  top: -150px;
+  right: -90px;
+  width: 360px;
+  height: 300px;
+  rotate: 15deg;
+  background: rgba(255, 250, 240, 0.22);
+}
+
+#waitingScreen::after {
+  bottom: -180px;
+  left: -100px;
+  width: 400px;
+  height: 330px;
+  rotate: -12deg;
+  background: rgba(255, 250, 240, 0.18);
+}
+
+#waitingScreen .waiting-wrap {
+  position: relative;
+  z-index: 1;
+  width: min(760px, 100%);
+  max-width: 760px;
+  margin: 0 auto;
+  padding: clamp(22px, 4vw, 38px);
+  border: 2px solid rgba(53, 72, 67, 0.15);
+  border-radius: 30px;
+  background: rgba(255, 250, 240, 0.9);
+  box-shadow: 0 14px 0 rgba(53, 72, 67, 0.1), 0 32px 70px var(--soft-shadow);
+  backdrop-filter: blur(14px);
+}
+
+#waitingScreen .waiting-header h2 {
+  margin: 0;
+  color: var(--soft-ink);
+  font-family: "Hannotate SC", "Kaiti SC", STKaiti, KaiTi, serif;
+  font-size: clamp(1.8rem, 4vw, 2.65rem);
+  font-weight: 600;
+}
+
+#waitingScreen .room-id-display {
+  width: fit-content;
+  max-width: 100%;
+  margin: 16px auto 0;
+  padding: 9px 13px;
+  border: 1px dashed rgba(81, 112, 99, 0.28);
+  border-radius: 999px;
+  background: rgba(226, 239, 218, 0.72);
+}
+
+#waitingScreen .room-label,
+#waitingScreen .slot-name,
+#waitingScreen .slot-status,
+#waitingScreen .waiting-hint,
+#waitingScreen .start-game-hint,
+#waitingScreen .tip,
+#waitingScreen .mode-label,
+#waitingScreen .fun-content {
+  color: var(--soft-muted);
+}
+
+#waitingScreen .room-id {
+  color: #547d6c;
+  font-family: "Avenir Next Condensed", "DIN Alternate", sans-serif;
+  letter-spacing: 0.08em;
+}
+
+#waitingScreen .copy-btn {
+  border: 0;
+  color: #496d5f;
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: none;
+}
+
+#waitingScreen .player-slots {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 11px;
+  margin: 24px 0 18px;
+  padding: 0;
+}
+
+#waitingScreen .player-slot {
+  min-width: 0;
+  min-height: 112px;
+  display: grid;
+  align-content: center;
+  border: 2px dashed rgba(53, 72, 67, 0.16);
+  border-radius: 20px;
+  padding: 12px 8px;
+  color: var(--soft-muted);
+  background: rgba(255, 255, 255, 0.5);
+  opacity: 0.72;
+}
+
+#waitingScreen .player-slot:nth-child(4n + 1) { background: rgba(154, 185, 200, 0.2); }
+#waitingScreen .player-slot:nth-child(4n + 2) { background: rgba(156, 188, 167, 0.22); }
+#waitingScreen .player-slot:nth-child(4n + 3) { background: rgba(203, 128, 110, 0.16); }
+#waitingScreen .player-slot:nth-child(4n) { background: rgba(210, 183, 115, 0.2); }
+
+#waitingScreen .player-slot.filled {
+  border-style: solid;
+  border-color: rgba(91, 130, 111, 0.48);
+  color: var(--soft-ink);
+  background: #eef3e9;
+  opacity: 1;
+  box-shadow: 0 6px 0 rgba(91, 130, 111, 0.1);
+}
+
+#waitingScreen .player-slot.you {
+  border-color: #c09e5d;
+  background: #f7edcf;
+  box-shadow: 0 6px 0 rgba(192, 158, 93, 0.16);
+}
+
+#waitingScreen .player-slot.filled .slot-name {
+  color: var(--soft-ink);
+  font-weight: 700;
+}
+
+#waitingScreen .player-slot.filled .slot-status {
+  color: #688d78;
+}
+
+#waitingScreen .waiting-player,
+#waitingScreen .mode-display,
+#waitingScreen .waiting-fun {
+  border: 1px solid rgba(53, 72, 67, 0.12);
+  border-radius: 16px;
+  color: var(--soft-ink);
+  background: rgba(232, 240, 226, 0.72);
+}
+
+#waitingScreen .waiting-count {
+  margin-bottom: 12px;
+  color: #9a7b43;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+#waitingScreen .progress-bar {
+  height: 10px;
+  border: 1px solid rgba(53, 72, 67, 0.1);
+  background: #e5e2d4;
+}
+
+#waitingScreen .progress-fill {
+  background: linear-gradient(90deg, #91b29c, #9bbdca, #d2b773);
+}
+
+#waitingScreen .spinner {
+  border-color: rgba(83, 118, 103, 0.18);
+  border-top-color: #769c88;
+}
+
+#waitingScreen .waiting-actions {
+  gap: 10px;
+  margin-top: 18px;
+}
+
+#waitingScreen .btn-sm {
+  min-height: 42px;
+  border: 1px solid rgba(53, 72, 67, 0.16);
+  border-radius: 999px;
+  color: #50665e;
+  background: rgba(255, 255, 255, 0.68);
+  box-shadow: 0 4px 0 rgba(53, 72, 67, 0.1);
+}
+
+#waitingScreen .start-game-btn:not(:disabled) {
+  border-color: #668e77;
+  color: #fffaf0;
+  background: #769b83;
+  box-shadow: 0 6px 0 #567461, 0 12px 22px rgba(86, 116, 97, 0.18);
+}
+
+#waitingScreen .start-game-btn:disabled {
+  color: #88928c;
+  background: #e6e9e1;
+}
+
+#waitingScreen .mode-value {
+  color: #55796a;
+  background: rgba(143, 183, 159, 0.2);
+}
+
+#waitingScreen .fun-title {
+  color: #9b7d46;
+}
+
+/* 对局：三块区域像不同颜色的桌游托盘。 */
+body[data-screen="gameScreen"] {
+  background:
+    radial-gradient(circle at 8% 8%, rgba(210, 183, 115, 0.3), transparent 24%),
+    radial-gradient(circle at 92% 15%, rgba(154, 185, 200, 0.28), transparent 28%),
+    linear-gradient(145deg, #f5ecd8, #e7efdf 54%, #e0ebef);
+}
+
+#gameScreen {
+  color: var(--soft-ink);
+  background: transparent;
+}
+
+#gameScreen .top-bar {
+  border: 2px solid rgba(53, 72, 67, 0.14);
+  border-bottom: 2px solid rgba(53, 72, 67, 0.18);
+  border-radius: 20px;
+  background: rgba(255, 250, 240, 0.9);
+  box-shadow: 0 8px 0 rgba(53, 72, 67, 0.09), 0 20px 42px rgba(53, 72, 67, 0.1);
+  backdrop-filter: blur(14px);
+}
+
+#gameScreen .round-badge,
+#gameScreen .phase-badge,
+#gameScreen .role-badge {
+  border: 1px solid rgba(53, 72, 67, 0.14);
+  border-radius: 999px;
+  color: var(--soft-ink);
+  box-shadow: none;
+}
+
+#gameScreen .round-badge { background: #e5efdf; }
+#gameScreen .phase-badge { background: #e8c6b9; animation: soft-phase-breathe 2.4s ease-in-out infinite; }
+#gameScreen .role-badge { border-color: rgba(184, 147, 78, 0.32); color: #876d3f; background: #f2e6c4; }
+
+@keyframes soft-phase-breathe {
+  50% { transform: translateY(-1px); background: #edcfbf; }
+}
+
+#gameScreen .timer {
+  color: #987b46;
+  text-shadow: none;
+}
+
+#gameScreen .timer.urgent,
+#gameScreen .timer-urgent {
+  color: #af625e;
+}
+
+#gameScreen .game-help-btn {
+  border: 1px solid rgba(72, 100, 89, 0.18);
+  border-radius: 999px;
+  color: #526c62;
+  background: #edf2e8;
+  box-shadow: none;
+}
+
+#gameScreen .game-layout {
+  gap: 16px;
+}
+
+#gameScreen .panel-left,
+#gameScreen .panel-center,
+#gameScreen .panel-right {
+  border: 2px solid rgba(53, 72, 67, 0.13);
+  border-radius: 22px;
+  color: var(--soft-ink);
+  box-shadow: 0 10px 0 rgba(53, 72, 67, 0.08), 0 22px 40px rgba(53, 72, 67, 0.08);
+}
+
+#gameScreen .panel-left {
+  border-right: 2px solid rgba(53, 72, 67, 0.13);
+  background: rgba(247, 239, 214, 0.88);
+}
+
+#gameScreen .panel-center {
+  background: rgba(255, 250, 240, 0.92);
+}
+
+#gameScreen .panel-right {
+  border-left: 2px solid rgba(53, 72, 67, 0.13);
+  background: rgba(224, 235, 239, 0.86);
+}
+
+#gameScreen .panel-left h3,
+#gameScreen .panel-right h3,
+#gameScreen .signal-history h3,
+#gameScreen .discussion-focus h3,
+#gameScreen .suspicion-timeline h3,
+#gameScreen .vote-history h3 {
+  color: var(--soft-ink);
+}
+
+#gameScreen .mission-tracker,
+#gameScreen .nomination-info,
+#gameScreen .stance-board,
+#gameScreen .discussion-focus,
+#gameScreen .vote-history,
+#gameScreen .suspicion-timeline,
+#gameScreen .signal-history {
+  margin: 0;
+  padding: 12px;
+  border: 1px solid rgba(53, 72, 67, 0.11);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.52);
+}
+
+#gameScreen .nomination-info { background: rgba(222, 234, 215, 0.7); }
+#gameScreen .stance-board { background: rgba(218, 232, 239, 0.72); }
+#gameScreen .discussion-focus { background: rgba(242, 226, 203, 0.72); }
+#gameScreen .vote-history { background: rgba(230, 225, 237, 0.65); }
+#gameScreen .suspicion-timeline { background: rgba(238, 218, 210, 0.64); }
+
+#gameScreen .leader-name {
+  color: #987b46;
+}
+
+#gameScreen .dot {
+  border-color: rgba(53, 72, 67, 0.14);
+  color: var(--soft-muted);
+  background: rgba(255, 255, 255, 0.65);
+}
+
+#gameScreen .dot.pending { background: rgba(255, 255, 255, 0.54); }
+#gameScreen .dot.success { border-color: #789e86; background: #a8c4ae; }
+#gameScreen .dot.fail { border-color: #ba756d; background: #d6a39a; }
+
+#gameScreen .team-member,
+#gameScreen .vote-player {
+  border-color: rgba(53, 72, 67, 0.13);
+  color: var(--soft-ink);
+  background: rgba(255, 255, 255, 0.68);
+}
+
+#gameScreen .nomination-reason,
+#gameScreen .stance-item,
+#gameScreen .focus-item,
+#gameScreen .suspicion-item,
+#gameScreen .vote-record,
+#gameScreen .signal-record {
+  border-color: rgba(53, 72, 67, 0.14);
+  color: var(--soft-muted);
+  background: rgba(255, 255, 255, 0.58);
+}
+
+#gameScreen .nomination-reason {
+  border-left-color: #86aebd;
+}
+
+#gameScreen .focus-item,
+#gameScreen .suspicion-item {
+  border-left-color: #c1a465;
+}
+
+#gameScreen .vote-record.approved { border-left-color: #759c83; }
+#gameScreen .vote-record.rejected { border-left-color: #bd786f; }
+
+#gameScreen .stage-area {
+  border-bottom: 1px solid rgba(53, 72, 67, 0.12);
+  background:
+    radial-gradient(ellipse at center bottom, rgba(154, 185, 200, 0.26), transparent 66%),
+    #f3ead7;
+}
+
+#gameScreen .chat-box {
+  border: 1px solid rgba(53, 72, 67, 0.13);
+  background: rgba(255, 253, 247, 0.86);
+  box-shadow: none;
+}
+
+#gameScreen .chat-msg {
+  border-left-color: #9bb7c2;
+  color: var(--soft-ink);
+  background: #edf3f3;
+}
+
+#gameScreen .chat-msg:nth-child(3n + 2) { background: #eef2e8; }
+#gameScreen .chat-msg:nth-child(3n) { background: #f5ecdf; }
+
+#gameScreen .chat-msg .msg-name {
+  color: #587e8d;
+}
+
+#gameScreen .chat-msg.mine {
+  border-left-color: #b5975d;
+  background: #f6edcf;
+}
+
+#gameScreen .chat-msg.mine .msg-name {
+  color: #8f713c;
+}
+
+#gameScreen .chat-msg.system {
+  color: var(--soft-muted);
+  background: transparent;
+}
+
+#gameScreen .chat-input-bar {
+  border-top: 1px solid rgba(53, 72, 67, 0.12);
+  background: #e7eee4;
+}
+
+#gameScreen .chat-input-bar input,
+#gameScreen .social-reason-input,
+#gameScreen #stanceActions select {
+  border: 1px solid rgba(53, 72, 67, 0.2);
+  border-radius: 12px;
+  color: var(--soft-ink);
+  background: rgba(255, 255, 255, 0.8);
+  box-shadow: none;
+}
+
+#gameScreen .chat-input-bar input:focus,
+#gameScreen .social-reason-input:focus,
+#gameScreen #stanceActions select:focus {
+  border-color: #7ca4b2;
+  box-shadow: 0 0 0 3px rgba(124, 164, 178, 0.18);
+  outline: 0;
+}
+
+#gameScreen .chat-input-bar input:disabled {
+  color: #8b938e;
+  background: #e4e7df;
+}
+
+#gameScreen .chat-input-bar button {
+  border-radius: 999px;
+  background: #7d9e8a;
+}
+
+#gameScreen .panel-right .player-item {
+  border: 1px solid rgba(53, 72, 67, 0.14);
+  color: var(--soft-ink);
+  background: rgba(255, 255, 255, 0.64);
+  box-shadow: none;
+}
+
+#gameScreen .player-item:nth-child(3n + 1) { background: rgba(237, 243, 235, 0.88); }
+#gameScreen .player-item:nth-child(3n + 2) { background: rgba(239, 235, 244, 0.82); }
+#gameScreen .player-item:nth-child(3n) { background: rgba(246, 235, 226, 0.84); }
+
+#gameScreen .player-item.me {
+  border-color: #b99a5d;
+  background: #f3e8c8;
+  box-shadow: 0 5px 0 rgba(185, 154, 93, 0.14);
+}
+
+#gameScreen .player-item.on-team {
+  border-color: #bd7d6f;
+  background: #f0d9d0;
+}
+
+#gameScreen .player-item.selected {
+  border-color: #739781;
+  background: #dce9dd;
+  box-shadow: 0 5px 0 rgba(115, 151, 129, 0.15);
+}
+
+#gameScreen .player-item.clickable:hover {
+  border-color: #b9796b;
+  background: #f3e2d8;
+}
+
+#gameScreen .puzzle-area,
+#gameScreen .reveal-area,
+#gameScreen .spectate-area {
+  border: 1px solid rgba(171, 138, 76, 0.24);
+  color: var(--soft-ink);
+  background: #f7eed7;
+  box-shadow: none;
+}
+
+#gameScreen .puzzle-title,
+#gameScreen .spectate-team {
+  color: #947743;
+}
+
+#gameScreen .puzzle-scenario,
+#gameScreen .reveal-vote-item {
+  border-color: rgba(53, 72, 67, 0.13);
+  color: var(--soft-ink);
+  background: rgba(255, 255, 255, 0.68);
+}
+
+#gameScreen .puzzle-opt {
+  border: 2px solid rgba(93, 126, 112, 0.28);
+  color: var(--soft-ink);
+  background: #e7efe5;
+  box-shadow: 0 6px 0 rgba(53, 72, 67, 0.1);
+}
+
+#gameScreen .puzzle-opt:nth-child(2) {
+  border-color: rgba(180, 112, 103, 0.28);
+  background: #f1ddd6;
+}
+
+#gameScreen .puzzle-opt:hover:not(:disabled) {
+  border-color: #b09155;
+  background: #f5ebce;
+}
+
+#gameScreen .puzzle-opt.selected {
+  border-color: #a66c61;
+  color: #fffaf0;
+  background: #bd7c6d;
+}
+
+#gameScreen .puzzle-letter {
+  border-color: rgba(157, 127, 70, 0.34);
+  color: #8f733f;
+  background: rgba(210, 183, 115, 0.24);
+}
+
+#gameScreen .signal-alert,
+#gameScreen .possession-warning {
+  border-color: rgba(181, 104, 98, 0.38);
+  border-radius: 14px;
+  color: #9f5d59;
+  background: #f2d9d3;
+  animation: none;
+}
+
+#gameScreen .action-bar {
+  border-top: 2px solid rgba(53, 72, 67, 0.13);
+  color: var(--soft-ink);
+  background: rgba(255, 250, 240, 0.94);
+  box-shadow: 0 -10px 26px rgba(53, 72, 67, 0.1);
+  backdrop-filter: blur(14px);
+}
+
+#gameScreen .phase-transition-notice {
+  border-color: rgba(178, 142, 75, 0.28);
+  color: #8c713f;
+  background: #f4e7c4;
+}
+
+#gameScreen .action-hint {
+  color: var(--soft-ink);
+}
+
+#gameScreen .action-btn {
+  border-radius: 999px;
+  box-shadow: 0 5px 0 rgba(53, 72, 67, 0.12);
+}
+
+#gameScreen .action-btn.approve {
+  border-color: #71947e;
+  background: #799b84;
+  box-shadow: 0 5px 0 #5e7c69;
+}
+
+#gameScreen .action-btn.reject {
+  border-color: #b16d66;
+  background: #bd7a72;
+  box-shadow: 0 5px 0 #965c57;
+}
+
+#gameScreen .action-btn.confirm {
+  border-color: #aa8b50;
+  color: #fffaf0;
+  background: #b99a5d;
+  box-shadow: 0 5px 0 #8c743f;
+}
+
+#gameScreen .action-btn.secondary {
+  border-color: rgba(53, 72, 67, 0.16);
+  color: var(--soft-muted);
+  background: #edf0e8;
+}
+
+#gameScreen .test-mode-watermark {
+  border: 1px solid rgba(115, 157, 175, 0.3);
+  border-radius: 999px;
+  color: #557b8c;
+  background: rgba(219, 235, 241, 0.92);
+  box-shadow: 0 5px 16px rgba(53, 72, 67, 0.1);
+}
+
+body[data-screen="gameScreen"] .debug-panel {
+  border-color: rgba(91, 126, 112, 0.28);
+  color: var(--soft-ink);
+  background: rgba(255, 250, 240, 0.97);
+  box-shadow: -10px 16px 36px rgba(53, 72, 67, 0.16);
+}
+
+body[data-screen="gameScreen"] .debug-panel.collapsed {
+  border-color: rgba(91, 126, 112, 0.24);
+  background: #edf2e9;
+  box-shadow: -6px 10px 22px rgba(53, 72, 67, 0.12);
+}
+
+body[data-screen="gameScreen"] .debug-header {
+  border-bottom-color: rgba(91, 126, 112, 0.18);
+  color: var(--soft-ink);
+  background: #e4ece1;
+}
+
+body[data-screen="gameScreen"] .debug-header h3,
+body[data-screen="gameScreen"] .debug-toggle,
+body[data-screen="gameScreen"] .debug-panel.collapsed .debug-toggle {
+  color: #6f7f77;
+  background: transparent;
+}
+
+body[data-screen="gameScreen"] .debug-section,
+body[data-screen="gameScreen"] .debug-log,
+body[data-screen="gameScreen"] .game-status-info,
+body[data-screen="gameScreen"] .ai-status-list {
+  color: var(--soft-ink);
+  background: #edf1e8;
+}
+
+body[data-screen="gameScreen"] .debug-actions button {
+  border-color: rgba(91, 126, 112, 0.28);
+  color: var(--soft-ink);
+  background: #e2ece1;
+}
+
+/* 结算：轻盈的战局手账，而不是终端报告。 */
+#finishedScreen {
+  min-height: 100vh;
+  padding: 56px 24px 44px;
+  color: var(--soft-ink);
+  background:
+    radial-gradient(circle at 10% 7%, rgba(210, 183, 115, 0.38), transparent 25%),
+    radial-gradient(circle at 90% 10%, rgba(154, 185, 200, 0.34), transparent 28%),
+    radial-gradient(circle at 82% 84%, rgba(203, 128, 110, 0.2), transparent 30%),
+    linear-gradient(145deg, #f7eed8, #e5eedc 52%, #dfeaf0);
+}
+
+#finishedScreen .finished-wrap {
+  width: min(900px, 100%);
+  max-width: 900px;
+  padding-top: 0;
+  gap: 16px;
+  text-align: left;
+}
+
+#finishedScreen .result-header {
+  margin: 0;
+  padding: clamp(22px, 4vw, 36px);
+  border: 2px solid rgba(53, 72, 67, 0.14);
+  border-radius: 28px;
+  color: var(--soft-ink);
+  background:
+    radial-gradient(circle at 90% 20%, rgba(210, 183, 115, 0.34), transparent 28%),
+    linear-gradient(135deg, #e1eee0, #dcebf0);
+  box-shadow: 0 10px 0 rgba(53, 72, 67, 0.09);
+  text-align: center;
+}
+
+#finishedScreen .result-header h1 {
+  color: #6d8978;
+  font-family: "Hannotate SC", "Kaiti SC", STKaiti, KaiTi, serif;
+  font-weight: 600;
+}
+
+#finishedScreen .result-header p {
+  color: var(--soft-muted);
+}
+
+#finishedScreen .roles-reveal,
+#finishedScreen .mission-summary,
+#finishedScreen .game-stats,
+#finishedScreen .game-review,
+#finishedScreen .mvp-section,
+#finishedScreen .game-feedback {
+  border: 1px solid rgba(53, 72, 67, 0.13);
+  border-radius: 20px;
+  color: var(--soft-ink);
+  background: rgba(255, 250, 240, 0.82);
+  box-shadow: 0 7px 0 rgba(53, 72, 67, 0.07);
+}
+
+#finishedScreen .roles-reveal { background: rgba(224, 235, 239, 0.84); }
+#finishedScreen .mission-summary { background: rgba(243, 233, 204, 0.86); }
+#finishedScreen .game-stats { background: rgba(228, 238, 222, 0.86); }
+#finishedScreen .mvp-section { background: rgba(239, 227, 210, 0.86); }
+
+#finishedScreen h3,
+#finishedScreen .roles-reveal h3,
+#finishedScreen .mission-summary h3,
+#finishedScreen .game-stats h3,
+#finishedScreen .mvp-section h3 {
+  color: var(--soft-ink);
+}
+
+#finishedScreen .role-card,
+#finishedScreen .stat-item,
+#finishedScreen .mvp-award,
+#finishedScreen .review-list {
+  border-color: rgba(53, 72, 67, 0.13);
+  color: var(--soft-ink);
+  background: rgba(255, 255, 255, 0.58);
+}
+
+#finishedScreen .role-card.good { border-color: #779b83; background: #e2eee2; }
+#finishedScreen .role-card.evil { border-color: #b9766d; background: #f0ddd7; }
+#finishedScreen .role-name,
+#finishedScreen .stat-label,
+#finishedScreen .review-section h4 { color: var(--soft-muted); }
+#finishedScreen .stat-value,
+#finishedScreen .mvp-title { color: var(--soft-ink); }
+#finishedScreen .mvp-player { color: #a1675c; }
+
+#finishedScreen .dot-big.success { border-color: #73967e; background: #a6c1ab; }
+#finishedScreen .dot-big.fail { border-color: #b67169; background: #d4a099; }
+
+#finishedScreen .finished-actions {
+  margin: 2px 0 4px;
+}
+
+#finishedScreen .finished-actions .lobby-return {
+  border-color: #a9695e;
+  color: #fffaf0;
+  background: #c77c6b;
+  box-shadow: 0 7px 0 #9f6056, 0 14px 26px rgba(96, 66, 59, 0.16);
+}
+
+#finishedScreen .finished-actions .lobby-return:hover {
+  background: #d08776;
+  box-shadow: 0 9px 0 #9f6056, 0 17px 30px rgba(96, 66, 59, 0.18);
+}
+
+#finishedScreen .action-btn.approve {
+  border-color: #72957d;
+  color: #fffaf0;
+  background: #7d9f88;
+  box-shadow: 0 5px 0 #5d7967;
+}
+
+#finishedScreen .action-btn.share,
+#finishedScreen .feedback-btn {
+  border-color: rgba(53, 72, 67, 0.17);
+  border-radius: 999px;
+  color: #60756c;
+  background: rgba(255, 255, 255, 0.65);
+  box-shadow: 0 4px 0 rgba(53, 72, 67, 0.09);
+}
+
+/* 身份揭示是正常联机的开场仪式，也必须保持轻松纸张质感。 */
+.role-reveal-overlay {
+  padding: 24px;
+  color: var(--soft-ink);
+  background:
+    radial-gradient(circle at 18% 18%, rgba(242, 214, 158, 0.36), transparent 32%),
+    radial-gradient(circle at 82% 22%, rgba(162, 199, 189, 0.34), transparent 34%),
+    rgba(53, 72, 67, 0.48);
+  backdrop-filter: blur(12px);
+}
+
+.role-reveal-content {
+  width: min(520px, 100%);
+  padding: 34px 30px 28px;
+  border: 2px solid rgba(53, 72, 67, 0.16);
+  border-radius: 30px;
+  color: var(--soft-ink);
+  background: #fffaf0;
+  box-shadow: 0 11px 0 rgba(53, 72, 67, 0.13), 0 32px 80px rgba(53, 72, 67, 0.24);
+}
+
+.role-reveal-icon {
+  width: 112px;
+  height: 112px;
+  margin: 0 auto 18px;
+  display: grid;
+  place-items: center;
+  border: 2px solid rgba(53, 72, 67, 0.13);
+  border-radius: 36px;
+  font-size: 4.5rem;
+  background: #e1ece4;
+  box-shadow: 0 7px 0 rgba(53, 72, 67, 0.09);
+}
+
+.role-reveal-icon.role-infiltrator,
+.role-reveal-icon.role-disruptor {
+  background: #f0ddd7;
+}
+
+.role-reveal-icon.role-signal_keeper,
+.role-reveal-icon.role-observer {
+  background: #e2e8f0;
+}
+
+.role-reveal-label {
+  margin-bottom: 12px;
+  color: #354843;
+  font-family: "Hannotate SC", "Kaiti SC", "STKaiti", serif;
+  font-size: clamp(2rem, 7vw, 2.65rem);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.role-reveal-desc {
+  max-width: 440px;
+  margin: 0 auto;
+  color: #667770;
+  font-size: 1rem;
+}
+
+.role-reveal-next {
+  border-color: rgba(111, 146, 122, 0.24);
+  border-radius: 16px;
+  color: #4f685e;
+  background: #e4eee2;
+}
+
+.role-reveal-enter {
+  border: 1px solid #a7655b;
+  border-radius: 999px;
+  color: #fffaf0;
+  background: #c77c6b;
+  box-shadow: 0 6px 0 #9f6056, 0 14px 28px rgba(96, 66, 59, 0.18);
+}
+
+.role-reveal-enter:hover {
+  background: #d08776;
+  box-shadow: 0 8px 0 #9f6056, 0 17px 30px rgba(96, 66, 59, 0.2);
+}
+
+.role-reveal-hint {
+  color: #839087;
+}
+
+/* 帮助、教程、断线和加载提示也沿用纸张质感。 */
+.help-panel,
+.tutorial-panel,
+.disconnect-overlay,
+.loading-overlay {
+  color: var(--soft-ink);
+  background: rgba(53, 72, 67, 0.36);
+  backdrop-filter: blur(8px);
+}
+
+.help-content,
+.tutorial-content,
+.disconnect-content {
+  border: 2px solid rgba(53, 72, 67, 0.16);
+  border-radius: 24px;
+  color: var(--soft-ink);
+  background: #fffaf0;
+  box-shadow: 0 12px 0 rgba(53, 72, 67, 0.12), 0 30px 70px rgba(53, 72, 67, 0.18);
+}
+
+.help-content h2,
+.tutorial-content h3,
+.disconnect-content h2 {
+  color: #a5685d;
+}
+
+.disconnect-content p,
+#reconnectStatus {
+  color: #667770;
+}
+
+.reconnect-progress {
+  height: 10px;
+  border: 1px solid rgba(53, 72, 67, 0.12);
+  background: #e5e6d9;
+}
+
+.reconnect-bar {
+  background: linear-gradient(90deg, #84a891, #c8a75e);
+}
+
+.reconnect-btn {
+  border: 1px solid rgba(53, 72, 67, 0.15);
+  border-radius: 999px;
+  color: #fffaf0;
+  background: #7d9f88;
+  box-shadow: 0 5px 0 #5d7967;
+}
+
+.reconnect-btn:hover {
+  background: #89aa94;
+}
+
+.help-section h3 {
+  color: #8f7442;
+}
+
+.help-close,
+.tutorial-nav button {
+  border: 1px solid rgba(53, 72, 67, 0.16);
+  border-radius: 999px;
+  color: var(--soft-ink);
+  background: #e3ede1;
+}
+
+.help-close {
+  color: #fffaf0;
+  background: #c77c6b;
+}
+
+.toast {
+  border: 1px solid rgba(53, 72, 67, 0.16);
+  border-radius: 999px;
+  color: var(--soft-ink);
+  background: #fffaf0;
+  box-shadow: 0 8px 0 rgba(53, 72, 67, 0.09), 0 18px 40px rgba(53, 72, 67, 0.14);
+}
+
+@media (max-width: 900px) {
+  #gameScreen .top-bar {
+    border-color: rgba(53, 72, 67, 0.14);
+    background: rgba(255, 250, 240, 0.94);
+  }
+
+  #gameScreen .panel-left,
+  #gameScreen .panel-center,
+  #gameScreen .panel-right {
+    box-shadow: 0 7px 0 rgba(53, 72, 67, 0.07);
+  }
+
+  #gameScreen .action-bar {
+    border-color: rgba(53, 72, 67, 0.16);
+    background: rgba(255, 250, 240, 0.96);
+    box-shadow: 0 -10px 24px rgba(53, 72, 67, 0.12);
+  }
+}
+
+@media (max-width: 620px) {
+  .role-reveal-overlay {
+    padding: 14px;
+  }
+
+  .role-reveal-content {
+    padding: 25px 18px 22px;
+    border-radius: 24px;
+  }
+
+  .role-reveal-icon {
+    width: 88px;
+    height: 88px;
+    border-radius: 28px;
+    font-size: 3.5rem;
+  }
+
+  #waitingScreen {
+    padding: 60px 12px 24px;
+  }
+
+  #waitingScreen .waiting-wrap {
+    padding: 20px 13px;
+    border-radius: 22px;
+  }
+
+  #waitingScreen .player-slots {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  #waitingScreen .player-slot {
+    min-height: 88px;
+  }
+
+  #waitingScreen .waiting-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  #waitingScreen .start-game-btn {
+    grid-column: 1 / -1;
+  }
+
+  #gameScreen .panel-left {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  #gameScreen .stage-area {
+    display: none;
+  }
+
+  #gameScreen .action-bar {
+    max-height: min(44vh, 360px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+  }
+
+  body[data-screen="gameScreen"].has-action-bar {
+    padding-bottom: calc(var(--action-bar-height, 118px) + 24px);
+  }
+
+  #gameScreen .top-left,
+  #gameScreen .top-center,
+  #gameScreen .top-right {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  body[data-screen="gameScreen"] .debug-panel.collapsed {
+    top: auto;
+    right: 12px;
+    bottom: 12px;
+    left: auto;
+    width: 48px;
+    min-height: 48px;
+    border-radius: 16px;
+  }
+
+  body[data-screen="gameScreen"] .debug-panel.collapsed .debug-header {
+    min-height: 48px;
+  }
+
+  body[data-screen="gameScreen"].has-action-bar .debug-panel.collapsed {
+    bottom: calc(var(--action-bar-height, 118px) + 24px);
+  }
+
+  #gameScreen .mission-tracker,
+  #gameScreen .nomination-info,
+  #gameScreen .stance-board,
+  #gameScreen .discussion-focus,
+  #gameScreen .vote-history,
+  #gameScreen .suspicion-timeline,
+  #gameScreen .signal-history {
+    padding: 11px;
+  }
+
+  #finishedScreen {
+    padding: 54px 12px 28px;
+  }
+
+  #finishedScreen .finished-wrap {
+    gap: 12px;
+  }
+
+  #finishedScreen .roles-reveal,
+  #finishedScreen .mission-summary,
+  #finishedScreen .game-stats,
+  #finishedScreen .game-review,
+  #finishedScreen .mvp-section,
+  #finishedScreen .game-feedback {
+    padding: 14px;
+    border-radius: 17px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #gameScreen .phase-badge,
+  #waitingScreen .tip,
+  #waitingScreen .player-slot.filled .slot-avatar {
+    animation: none;
+  }
+}

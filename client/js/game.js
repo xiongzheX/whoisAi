@@ -43,7 +43,7 @@ function handleNetworkError() {
 function withRetry(fn, maxRetries = 3, delay = 1000) {
   return new Promise((resolve, reject) => {
     let retries = 0;
-    
+
     function attempt() {
       fn()
         .then(resolve)
@@ -125,18 +125,6 @@ function manualReconnect() {
   if (socket) {
     updateConnectionStatus('reconnecting');
     socket.connect();
-    
-    // 重连成功后重新加入房间
-    socket.on('connect', () => {
-      updateConnectionStatus('connected');
-      if (currentRoomId && myName) {
-        socket.emit('joinRoom', {
-          roomId: currentRoomId,
-          name: myName,
-          mode: gameMode
-        });
-      }
-    });
   }
 }
 
@@ -259,10 +247,14 @@ function startTutorial() {
 //  状态
 // ═══════════════════════════════════════
 let socket = null;
+let intentionalDisconnect = false;
 let myId = null;
 let myName = '';
 let myRole = null;
 let currentRoomId = '';
+let currentGameId = 'who-is-ai';
+let currentSessionId = '';
+let currentSnapshotVersion = -1;
 let gameMode = 'normal';
 let currentPhase = null;
 let messagesLeft = 4;   // 剩余消息数
@@ -280,6 +272,13 @@ let voteHistory = []; // 投票历史
 let signalHistory = []; // 侦测者历史
 let suspicionTimeline = []; // 可疑事件时间线
 let discussionFocus = []; // 当前讨论焦点
+let currentStances = {};
+let nominationHistory = [];
+let currentRoundNumber = 0;
+let stanceSubmittedRound = 0;
+let gameStartedAt = 0;
+const messageCountByPlayer = new Map();
+let lastGameSummary = null;
 
 // 任务行动状态
 let currentPuzzle = null;
@@ -294,12 +293,507 @@ let isPaused = false; // 游戏是否暂停
 let debugLogEntries = []; // 调试日志
 let aiPlayers = []; // AI玩家列表
 let gameRoom = null; // 游戏房间状态
+let debugListenersReady = false;
+let lastDebugStateKey = '';
 let pendingJoin = false;
 let possessionToastMutedUntil = 0;
 const generatedModeRooms = {};
-const MIN_PLAYERS = 5;
+const MIN_PLAYERS = 3;
+const FULL_PLAYERS = 5;
 const MAX_PLAYERS = 8;
 let waitingPlayers = [];
+let platformGames = [];
+let selectedPlatformGameID = '';
+let waitingRoomsRequestID = 0;
+let waitingRoomsTimer = null;
+const PLAYER_TOKEN_KEY = 'whoisai.playerToken';
+const LAST_SESSION_KEY = 'whoisai.lastSession';
+const SAVED_SESSIONS_KEY = 'whoisai.savedSessions';
+const MAX_SAVED_SESSIONS = 8;
+let playerToken = '';
+let resumeSessionCheckID = 0;
+
+async function loadPlatformGameCatalog() {
+  const container = document.getElementById('platformGameCatalog');
+  if (!container) return;
+  try {
+    const response = await fetch('/api/platform/games', { headers: { Accept: 'application/json' } });
+    if (!response.ok) return;
+    const { games = [] } = await response.json();
+    if (!Array.isArray(games) || games.length === 0) return;
+    platformGames = games.filter(game => game?.status === 'active');
+    if (!platformGames.some(game => game.id === selectedPlatformGameID)) {
+      selectedPlatformGameID = platformGames[0]?.id || '';
+    }
+    container.innerHTML = games.map((game, index) => {
+      const active = game.status === 'active';
+      const selected = active && game.id === selectedPlatformGameID;
+      const playerRange = game.minPlayers === game.maxPlayers ? `${game.minPlayers} 人` : `${game.minPlayers}–${game.maxPlayers} 人`;
+      const status = active ? `${playerRange}房间` : game.status === 'coming_soon' ? '正在筹备' : '暂停开放';
+      const icons = { 'who-is-ai': '◌', 'bean-sprint': '≈', 'dumpling-sumo': '◯' };
+      const tagText = Array.isArray(game.tags) ? game.tags.slice(0, 2).map(escapeHtml).join(' · ') : '';
+      const body = `<span class="game-card-index">${icons[game.id] || String(index + 1).padStart(2, '0')}</span>
+        <div class="game-card-copy">
+          <small>${escapeHtml(tagText || status)}</small>
+          <strong>${escapeHtml(game.name)}</strong>
+          <p>${escapeHtml(game.description || '')}</p>
+          <span class="game-card-action">${active ? `${status} · 查看等待房 →` : status}</span>
+        </div>`;
+      if (active) {
+        return `<a class="platform-game-card is-active game-${escapeHtml(game.id)}${selected ? ' is-selected' : ''}" data-game-id="${escapeHtml(game.id)}" href="${escapeHtml(game.route || '#who-is-ai-room')}"${selected ? ' aria-current="true"' : ''}>${body}</a>`;
+      }
+      return `<article class="platform-game-card is-coming game-${escapeHtml(game.id)}" data-game-id="${escapeHtml(game.id)}">${body}</article>`;
+    }).join('');
+    container.onclick = (event) => {
+      const card = event.target.closest('.platform-game-card[data-game-id]');
+      if (!card || !card.classList.contains('is-active')) return;
+      event.preventDefault();
+      selectPlatformGame(card.dataset.gameId, true);
+    };
+    document.getElementById('refreshPlatformRooms')?.addEventListener('click', () => loadWaitingRooms(false));
+    document.getElementById('platformRoomList')?.addEventListener('click', handleWaitingRoomClick);
+    document.getElementById('platformJoinCode')?.addEventListener('click', joinSelectedPlatformRoom);
+    document.getElementById('platformInviteCode')?.addEventListener('keydown', event => {
+      if (event.key === 'Enter') joinSelectedPlatformRoom();
+    });
+    selectPlatformGame(selectedPlatformGameID, false);
+    if (!waitingRoomsTimer) {
+      waitingRoomsTimer = setInterval(() => {
+        const loginScreen = document.getElementById('loginScreen');
+        if (loginScreen && !loginScreen.classList.contains('hidden')) loadWaitingRooms(true);
+      }, 5000);
+    }
+  } catch (error) {
+    console.warn('加载游戏平台目录失败:', error);
+  }
+}
+
+function selectPlatformGame(gameID, focusRooms) {
+  const game = platformGames.find(item => item.id === gameID);
+  if (!game) return;
+  selectedPlatformGameID = game.id;
+  document.querySelectorAll('#platformGameCatalog .platform-game-card').forEach(card => {
+    const selected = card.dataset.gameId === game.id;
+    card.classList.toggle('is-selected', selected);
+    if (selected) card.setAttribute('aria-current', 'true');
+    else card.removeAttribute('aria-current');
+  });
+  const gameName = document.getElementById('selectedRoomGameName');
+  if (gameName) gameName.textContent = game.name;
+  const whoForm = document.getElementById('who-is-ai-room');
+  const duelForm = document.getElementById('platformDuelActions');
+  const roomBrowser = document.getElementById('platformRoomBrowser');
+  const isWhoIsAI = game.id === 'who-is-ai';
+  whoForm?.classList.toggle('hidden', !isWhoIsAI);
+  duelForm?.classList.toggle('hidden', isWhoIsAI);
+  document.body.dataset.selectedGame = game.id;
+  (isWhoIsAI ? document.getElementById('whoRoomBrowserSlot') : document.getElementById('duelRoomBrowserSlot'))
+    ?.appendChild(roomBrowser);
+  const duelName = document.getElementById('platformDuelGameName');
+  const duelDescription = document.getElementById('platformSelectedDescription');
+  const duelNumber = document.getElementById('platformDuelNumber');
+  if (!isWhoIsAI && duelName) duelName.textContent = game.name;
+  if (!isWhoIsAI && duelDescription) duelDescription.textContent = game.description || '两人同步准备，轻松开一局。';
+  if (!isWhoIsAI && duelNumber) duelNumber.textContent = game.id === 'bean-sprint' ? '02' : '03';
+  const createLink = document.getElementById('createPlatformRoom');
+  if (createLink && !isWhoIsAI) {
+    const createURL = new URL(game.route, window.location.origin);
+    createURL.searchParams.set('intent', 'create');
+    createLink.href = `${createURL.pathname}${createURL.search}`;
+  }
+  loadWaitingRooms(false);
+  if (focusRooms) {
+    const target = isWhoIsAI ? whoForm : duelForm;
+    if (window.matchMedia('(max-width: 980px)').matches) {
+      target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+}
+
+async function loadWaitingRooms(silent) {
+  const list = document.getElementById('platformRoomList');
+  const game = platformGames.find(item => item.id === selectedPlatformGameID);
+  if (!list || !game) return;
+  const requestID = ++waitingRoomsRequestID;
+  if (!silent) list.innerHTML = '<p class="platform-room-loading">正在查看谁在等朋友…</p>';
+  try {
+    const response = await fetch(`/api/platform/rooms?gameId=${encodeURIComponent(game.id)}`, {
+      headers: { Accept: 'application/json' },
+      cache: 'no-store'
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const { rooms = [] } = await response.json();
+    if (requestID !== waitingRoomsRequestID) return;
+    if (!Array.isArray(rooms) || rooms.length === 0) {
+      list.innerHTML = `<div class="platform-room-empty"><span>☀</span><strong>还没有人在等</strong><small>你可以先开一间，朋友会在这里看到。</small></div>`;
+      return;
+    }
+    list.innerHTML = rooms.map(room => {
+      const joinURL = platformRoomJoinURL(game, room.code);
+      return `<article class="platform-room-row">
+        <div class="platform-room-people" aria-label="${Number(room.playerCount)}/${Number(room.maxPlayers)} 人">${Number(room.playerCount)}<span>/ ${Number(room.maxPlayers)}</span></div>
+        <div class="platform-room-copy">
+          <strong>${escapeHtml(room.code)}</strong>
+          <small>${escapeHtml(room.hostName || '一位朋友')}开的房 · 还差 ${Number(room.openSeats)} 人</small>
+        </div>
+        <a class="platform-room-join" data-room-code="${escapeHtml(room.code)}" data-game-id="${escapeHtml(game.id)}" href="${escapeHtml(joinURL)}">加入</a>
+      </article>`;
+    }).join('');
+  } catch (error) {
+    if (requestID !== waitingRoomsRequestID || silent) return;
+    list.innerHTML = '<div class="platform-room-empty is-error"><strong>暂时没拿到房间列表</strong><small>可以刷新，或直接自己开一间。</small></div>';
+  }
+}
+
+function platformRoomJoinURL(game, roomCode) {
+  const url = new URL(game.route || '/', window.location.origin);
+  url.searchParams.set('room', roomCode);
+  return `${url.pathname}${url.search}${url.hash}`;
+}
+
+function handleWaitingRoomClick(event) {
+  const link = event.target.closest('.platform-room-join[data-room-code]');
+  if (!link || link.dataset.gameId !== 'who-is-ai') return;
+  event.preventDefault();
+  chooseWhoIsAIRoom(link.dataset.roomCode);
+}
+
+function joinSelectedPlatformRoom() {
+  const game = platformGames.find(item => item.id === selectedPlatformGameID);
+  const input = document.getElementById('platformInviteCode');
+  const roomCode = input?.value.trim();
+  if (!game || !roomCode) {
+    input?.focus();
+    showToast('请先输入邀请码');
+    return;
+  }
+  if (game.id === 'who-is-ai') {
+    chooseWhoIsAIRoom(roomCode);
+    return;
+  }
+  window.location.href = platformRoomJoinURL(game, roomCode);
+}
+
+function chooseWhoIsAIRoom(roomCode) {
+  const input = document.getElementById('roomId');
+  const form = document.getElementById('who-is-ai-room');
+  if (input && roomCode) input.value = roomCode;
+  form?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  setTimeout(() => (roomCode ? document.getElementById('joinBtn') : input)?.focus(), 250);
+}
+
+function resetGameClientState() {
+  currentPhase = null;
+  currentRoundNumber = 0;
+  currentSnapshotVersion = -1;
+  myRole = null;
+  proposedTeamIds = [];
+  selectedMembers = [];
+  isLeader = false;
+  currentPuzzle = null;
+  missionAction = null;
+  puzzleSubPhase = null;
+  isOnMissionTeam = false;
+  currentCanSabotage = false;
+  messagesLeft = 4;
+  voteHistory = [];
+  signalHistory = [];
+  suspicionTimeline = [];
+  discussionFocus = [];
+  currentStances = {};
+  nominationHistory = [];
+  stanceSubmittedRound = 0;
+  gameStartedAt = 0;
+  messageCountByPlayer.clear();
+  lastGameSummary = null;
+  isPaused = false;
+  gameRoom = null;
+  lastDebugStateKey = '';
+  debugLogEntries = [];
+  if (timerInterval) clearInterval(timerInterval);
+  timerInterval = null;
+  timerValue = 0;
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = null;
+  document.getElementById('toast')?.classList.add('hidden');
+  document.getElementById('chatMessages')?.replaceChildren();
+  document.getElementById('voteHistoryList')?.replaceChildren();
+  document.getElementById('signalHistoryList')?.replaceChildren();
+  renderMissionDots([]);
+  renderNominationReason('');
+  renderStances({});
+  updateDiscussionFocus([]);
+  renderSuspicionTimeline();
+  updateDebugLogDisplay();
+  updatePauseButton();
+  hideAllActions();
+  hidePuzzleUI();
+}
+
+function applyGameSnapshot({ sessionId, gameId, version, serverNow, publicState, privateState }) {
+  if (!sessionId || !publicState) return;
+  const nextVersion = Number(version);
+  if (currentSessionId === sessionId && nextVersion <= currentSnapshotVersion) return;
+  if (currentSessionId && currentSessionId !== sessionId) {
+    resetGameClientState();
+  }
+  currentSessionId = sessionId;
+  currentGameId = gameId || currentGameId;
+  currentSnapshotVersion = nextVersion;
+  gameMode = publicState.mode || gameMode;
+  currentPhase = publicState.currentPhase || currentPhase;
+  currentRoundNumber = Number(publicState.currentRound || 0);
+  proposedTeamIds = publicState.proposedTeam || [];
+  voteHistory = publicState.voteHistory || [];
+  nominationHistory = publicState.nominationHistory || [];
+  suspicionTimeline = publicState.suspicionEvents || [];
+  discussionFocus = publicState.discussionFocus || [];
+  currentStances = publicState.stances?.[currentRoundNumber] || {};
+  gameStartedAt = Number(publicState.startedAt || 0);
+  isPaused = !!publicState.debugPaused;
+
+  const players = publicState.players || [];
+  rememberPlayers(players);
+  renderGamePlayers(players);
+  renderMissionDots(publicState.missionResults || []);
+  updateVoteHistory(voteHistory);
+  renderStances(currentStances);
+  updateDiscussionFocus(discussionFocus);
+  renderSuspicionTimeline();
+  renderNominationReason(publicState.nominationReason || '');
+  const leader = players.find(player => player.id === publicState.currentLeader);
+  const leaderName = document.getElementById('leaderName');
+  if (leaderName) leaderName.textContent = leader?.name || '--';
+  renderProposedTeam((publicState.proposedTeam || []).map(playerDisplayName));
+
+  const chat = document.getElementById('chatMessages');
+  if (chat) chat.innerHTML = '';
+  messageCountByPlayer.clear();
+  (publicState.chatMessages || []).forEach(message => {
+    addChatMessage(message.playerName, message.displayed, message.playerId === myId);
+    if (message.playerId) {
+      messageCountByPlayer.set(message.playerId, (messageCountByPlayer.get(message.playerId) || 0) + 1);
+    }
+  });
+
+  if (privateState) {
+    myRole = privateState.role || myRole;
+    const roleBadge = document.getElementById('myRole');
+    if (roleBadge && privateState.roleLabel) roleBadge.textContent = privateState.roleLabel;
+    messagesLeft = Number(privateState.messagesLeft ?? messagesLeft);
+    updateMsgCounter();
+    if (Array.isArray(privateState.signalHistory) && privateState.signalHistory.length > 0) {
+      signalHistory = privateState.signalHistory;
+      updateSignalHistory(signalHistory);
+    }
+    if (currentPhase === 'mission') {
+      if (privateState.mission) {
+        isOnMissionTeam = true;
+        currentPuzzle = privateState.mission;
+        currentCanSabotage = !!privateState.mission.canSabotage;
+        showPuzzle(privateState.mission, {
+          isPossessed: privateState.mission.isPossessed,
+          canSabotage: privateState.mission.canSabotage,
+        });
+        if (privateState.missionVoteSubmitted) {
+          const status = document.getElementById('missionSubmissionStatus');
+          if (status) {
+            status.textContent = '✓ 本轮行动已提交 · 等待其他队员';
+            status.classList.remove('hidden');
+          }
+        }
+      } else {
+        isOnMissionTeam = false;
+        showSpectate((publicState.proposedTeam || []).map(playerDisplayName), publicState.missionTitle || '秘密任务');
+      }
+    }
+  }
+
+  if (isPaused) {
+    showPausedTimer();
+  } else if (publicState.phaseDeadline) {
+    const remaining = Math.max(0, Math.ceil((Number(publicState.phaseDeadline) - Number(serverNow || Date.now())) / 1000));
+    startTimer(remaining);
+  }
+}
+
+function getOrCreatePlayerToken(roomId) {
+  const roomTokenKey = `${PLAYER_TOKEN_KEY}.${roomId}`;
+  const sharedRoomTokenKey = `party-room.${roomId}.token`;
+  const saved = sessionStorage.getItem(roomTokenKey);
+  if (saved && /^[A-Za-z0-9_-]{16,80}$/.test(saved)) {
+    sessionStorage.setItem(sharedRoomTokenKey, saved);
+    return saved;
+  }
+
+  const shared = sessionStorage.getItem(sharedRoomTokenKey);
+  if (shared && /^[A-Za-z0-9_-]{16,80}$/.test(shared)) {
+    sessionStorage.setItem(roomTokenKey, shared);
+    return shared;
+  }
+  const token = createPlayerToken();
+  sessionStorage.setItem(roomTokenKey, token);
+  sessionStorage.setItem(sharedRoomTokenKey, token);
+  return token;
+}
+
+function createPlayerToken() {
+  const randomPart = window.crypto?.randomUUID
+    ? window.crypto.randomUUID().replaceAll('-', '')
+    : `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`;
+  return `player_${randomPart}`.slice(0, 80);
+}
+
+function rememberLastSession() {
+  if (!currentRoomId || !myName) return;
+  const session = {
+    roomId: currentRoomId,
+    name: myName,
+    mode: gameMode,
+    savedAt: Date.now()
+  };
+  const sessions = readSavedSessions().filter(saved =>
+    saved.roomId !== session.roomId || saved.mode !== session.mode
+  );
+  sessions.unshift(session);
+  localStorage.setItem(SAVED_SESSIONS_KEY, JSON.stringify(sessions.slice(0, MAX_SAVED_SESSIONS)));
+  localStorage.setItem(LAST_SESSION_KEY, JSON.stringify(session));
+}
+
+function isValidSavedSession(session) {
+  return !!session && !!session.roomId && !!session.name &&
+    ['normal', 'test', 'solo'].includes(session.mode) && Number.isFinite(Number(session.savedAt));
+}
+
+function readSavedSessions() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(SAVED_SESSIONS_KEY) || '[]');
+    const sessions = Array.isArray(stored) ? stored.filter(isValidSavedSession) : [];
+    const legacy = JSON.parse(localStorage.getItem(LAST_SESSION_KEY) || 'null');
+    if (isValidSavedSession(legacy) && !sessions.some(session =>
+      session.roomId === legacy.roomId && session.mode === legacy.mode
+    )) {
+      sessions.push(legacy);
+    }
+    return sessions.sort((a, b) => Number(b.savedAt) - Number(a.savedAt));
+  } catch {
+    return [];
+  }
+}
+
+function readLastSession() {
+  const sessions = readSavedSessions();
+  const roomInput = document.getElementById('roomId');
+  const preferredRoom = roomInput?.value.trim() || '';
+  return sessions.find(session => session.mode === gameMode && session.roomId === preferredRoom) ||
+    sessions.find(session => session.mode === gameMode) || null;
+}
+
+function sameSavedSession(left, right) {
+  return left?.roomId === right?.roomId && left?.mode === right?.mode;
+}
+
+function forgetSavedSession(session) {
+  if (!session) return;
+  const remaining = readSavedSessions().filter(saved => !sameSavedSession(saved, session));
+  localStorage.setItem(SAVED_SESSIONS_KEY, JSON.stringify(remaining.slice(0, MAX_SAVED_SESSIONS)));
+  try {
+    const last = JSON.parse(localStorage.getItem(LAST_SESSION_KEY) || 'null');
+    if (!sameSavedSession(last, session)) return;
+    if (remaining[0]) {
+      localStorage.setItem(LAST_SESSION_KEY, JSON.stringify(remaining[0]));
+    } else {
+      localStorage.removeItem(LAST_SESSION_KEY);
+    }
+  } catch {
+    localStorage.removeItem(LAST_SESSION_KEY);
+  }
+}
+
+async function checkSavedSessionRoom(session) {
+  if (!session?.roomId) return { exists: false, definitive: true };
+  try {
+    const response = await fetch(`/api/platform/rooms/${encodeURIComponent(session.roomId)}`, {
+      headers: { Accept: 'application/json' },
+      cache: 'no-store'
+    });
+    if (response.status === 404 || response.status === 410) {
+      return { exists: false, definitive: true };
+    }
+    if (!response.ok) return { exists: false, definitive: false };
+    const payload = await response.json();
+    return {
+      exists: payload?.room?.code === session.roomId,
+      definitive: true
+    };
+  } catch {
+    return { exists: false, definitive: false };
+  }
+}
+
+function formatSessionAge(savedAt) {
+  const elapsedMinutes = Math.max(0, Math.floor((Date.now() - Number(savedAt)) / 60000));
+  if (elapsedMinutes < 1) return '刚刚';
+  if (elapsedMinutes < 60) return `${elapsedMinutes}分钟前`;
+  const elapsedHours = Math.floor(elapsedMinutes / 60);
+  if (elapsedHours < 24) return `${elapsedHours}小时前`;
+  return `${Math.floor(elapsedHours / 24)}天前`;
+}
+
+async function updateResumeGameButton() {
+  const button = document.getElementById('resumeGameBtn');
+  if (!button) return;
+  const checkID = ++resumeSessionCheckID;
+  const session = readLastSession();
+  button.classList.add('hidden');
+  button.disabled = true;
+  if (!session) return;
+
+  const validation = await checkSavedSessionRoom(session);
+  if (checkID !== resumeSessionCheckID || session.mode !== gameMode) return;
+  if (!validation.exists) {
+    if (validation.definitive) {
+      forgetSavedSession(session);
+      updateResumeGameButton();
+    }
+    return;
+  }
+
+  const modeLabels = { normal: '正常', test: '测试', solo: '单人' };
+  button.textContent = `↩ 返回房间 · ${session.roomId} · ${modeLabels[session.mode]} · ${formatSessionAge(session.savedAt)}`;
+  button.disabled = false;
+  button.classList.remove('hidden');
+}
+
+async function resumeLastGame() {
+  const session = readLastSession();
+  if (!session) {
+    showToast('没有可恢复的对局');
+    updateResumeGameButton();
+    return;
+  }
+  const button = document.getElementById('resumeGameBtn');
+  if (button) {
+    button.disabled = true;
+    button.textContent = '正在确认房间…';
+  }
+  const validation = await checkSavedSessionRoom(session);
+  if (!validation.exists) {
+    if (validation.definitive) {
+      forgetSavedSession(session);
+      showToast('原房间已结束，最近记录已清理');
+    } else {
+      showToast('暂时无法确认房间状态，请稍后再试');
+    }
+    updateResumeGameButton();
+    return;
+  }
+  document.getElementById('playerName').value = session.name;
+  document.getElementById('roomId').value = session.roomId;
+  setMode(session.mode);
+  document.getElementById('roomId').value = session.roomId;
+  joinGame();
+}
 
 // ═══════════════════════════════════════
 //  登录 & 加入
@@ -313,6 +807,7 @@ function setMode(mode) {
   });
   updateModeDisplay(mode);
   syncRoomInputForMode(mode);
+  updateResumeGameButton();
   updateStartGameButton(waitingPlayers);
 }
 
@@ -347,16 +842,22 @@ function syncRoomInputForMode(mode) {
   if (isDefaultRoom) roomInput.value = generatedModeRooms[mode];
 }
 
+function rotateEphemeralRoom(mode) {
+  if (mode !== 'test' && mode !== 'solo') return;
+  delete generatedModeRooms[mode];
+  const roomInput = document.getElementById('roomId');
+  if (roomInput) roomInput.value = 'room1';
+  syncRoomInputForMode(mode);
+}
+
 function restoreJoinButton() {
-  const joinBtn = document.getElementById('joinBtn');
-  if (!joinBtn) return;
-  const btnText = joinBtn.querySelector('.btn-text');
-  const btnLoading = joinBtn.querySelector('.btn-loading');
-  if (btnText && btnLoading) {
-    btnText.classList.remove('hidden');
-    btnLoading.classList.add('hidden');
-  }
-  joinBtn.disabled = false;
+  ['joinBtn', 'quickCreateWhoAI'].forEach(id => {
+    const button = document.getElementById(id);
+    if (!button) return;
+    button.querySelector('.btn-text')?.classList.remove('hidden');
+    button.querySelector('.btn-loading')?.classList.add('hidden');
+    button.disabled = false;
+  });
 }
 
 function handleJoinRejected(message) {
@@ -366,15 +867,25 @@ function handleJoinRejected(message) {
   if (!currentPhase && document.body.dataset.screen === 'waitingScreen') {
     showScreen('loginScreen');
   }
+  if (currentRoomId && message.includes('房间不存在')) {
+    forgetSavedSession({ roomId: currentRoomId, mode: gameMode });
+  }
+  rotateEphemeralRoom(gameMode);
+  updateResumeGameButton();
   showError(message);
 }
 
 function backToHome() {
+	const previousMode = gameMode;
   // 断开 socket 连接
   if (socket) {
-    socket.disconnect();
+    const exitingSocket = socket;
+    intentionalDisconnect = true;
+    exitingSocket.emit('leaveRoom');
+    setTimeout(() => exitingSocket.disconnect(), 180);
     socket = null;
   }
+	debugListenersReady = false;
   // 重置状态
   myId = null;
   myName = '';
@@ -382,14 +893,25 @@ function backToHome() {
   currentRoomId = '';
   gameMode = 'normal';
   currentPhase = null;
+	if (previousMode === 'test' || previousMode === 'solo') {
+	  delete generatedModeRooms[previousMode];
+	}
+	const roomInput = document.getElementById('roomId');
+	if (roomInput) roomInput.value = 'room1';
+	document.querySelectorAll('.mode-btn').forEach(btn => {
+	  const selected = btn.dataset.mode === 'normal';
+	  btn.classList.toggle('active', selected);
+	  btn.setAttribute('aria-pressed', selected ? 'true' : 'false');
+	});
   // 显示登录界面
   showScreen('loginScreen');
 }
 
-function joinGame() {
+function joinGame(createNew = false) {
+  intentionalDisconnect = false;
   const nameInput = document.getElementById('playerName');
   const roomInput = document.getElementById('roomId');
-  const joinBtn = document.getElementById('joinBtn');
+  const joinBtn = document.getElementById(createNew ? 'quickCreateWhoAI' : 'joinBtn');
   
   // 验证昵称
   myName = nameInput.value.trim();
@@ -405,7 +927,14 @@ function joinGame() {
     return;
   }
   
-  currentRoomId = roomInput.value.trim() || 'room1';
+  currentRoomId = createNew ? '' : roomInput.value.trim();
+  if (!createNew && !currentRoomId) {
+    showToast('❌ 请输入邀请码');
+    roomInput.focus();
+    return;
+  }
+  playerToken = createNew ? createPlayerToken() : getOrCreatePlayerToken(currentRoomId);
+  myId = playerToken;
   updateModeDisplay(gameMode);
 
   // 显示按钮加载状态
@@ -421,7 +950,7 @@ function joinGame() {
   pendingJoin = true;
   showScreen('waitingScreen');
   const waitingRoomId = document.getElementById('waitingRoomId');
-  if (waitingRoomId) waitingRoomId.textContent = currentRoomId;
+  if (waitingRoomId) waitingRoomId.textContent = currentRoomId || '正在创建…';
   updateModeDisplay(gameMode);
   
   // 开始等待提示
@@ -434,12 +963,14 @@ function joinGame() {
   registerEvents();
 
   socket.on('connect', () => {
-    myId = socket.id;
-    console.log('已连接:', myId);
+    updateConnectionStatus('connected');
+    console.log('已连接:', socket.id, '玩家:', myId);
     socket.emit('joinRoom', {
       roomId: currentRoomId,
       name: myName,
-      mode: gameMode
+      mode: gameMode,
+      playerToken,
+      createNew
     });
   });
   
@@ -455,8 +986,7 @@ function joinGame() {
 
 function copyRoomId() {
   const shareUrl = buildRoomShareUrl(currentRoomId, gameMode || 'normal');
-  const copyText = `${currentRoomId}\n${shareUrl}`;
-  navigator.clipboard.writeText(copyText).then(() => {
+  navigator.clipboard.writeText(shareUrl).then(() => {
     // 按钮反馈
     const btn = document.getElementById('copyBtn');
     if (btn) {
@@ -468,7 +998,7 @@ function copyRoomId() {
         btn.disabled = false;
       }, 2000);
     }
-    showToast('房间号和邀请链接已复制');
+    showToast('邀请链接已复制，可直接粘贴到浏览器打开');
     // 添加复制成功动画
     copyRoomIdSuccess();
   }).catch(() => {
@@ -486,12 +1016,20 @@ function buildRoomShareUrl(roomId, mode) {
 
 function requestStartGame() {
   if (!socket || !currentRoomId) return;
-  const humanCount = waitingPlayers.filter(p => !p.isAI).length;
+  const humanCount = waitingPlayers.filter(p => !p.isAI && !p.disconnected).length;
   if (gameMode === 'normal' && humanCount < MIN_PLAYERS) {
     showToast(`❌ 至少需要 ${MIN_PLAYERS} 名玩家才能开始`);
     return;
   }
-  socket.emit('startGame', { roomId: currentRoomId });
+  socket.emit('startGame', {
+    roomId: currentRoomId,
+    fillWithAI: gameMode === 'normal' && humanCount < FULL_PLAYERS
+  });
+}
+
+function requestRematch() {
+  if (!socket || !currentRoomId) return;
+  socket.emit('rematch', { roomId: currentRoomId });
 }
 
 function applyInitialRoomParams() {
@@ -517,6 +1055,36 @@ function applyInitialRoomParams() {
 // ═══════════════════════════════════════
 function registerEvents() {
 
+  socket.on('roomJoined', ({ playerId, roomId }) => {
+    if (playerId) myId = playerId;
+    if (roomId) {
+      currentRoomId = roomId;
+      const roomInput = document.getElementById('roomId');
+      const waitingRoomId = document.getElementById('waitingRoomId');
+      if (roomInput) roomInput.value = roomId;
+      if (waitingRoomId) waitingRoomId.textContent = roomId;
+      sessionStorage.setItem(`${PLAYER_TOKEN_KEY}.${roomId}`, playerToken);
+      sessionStorage.setItem(`party-room.${roomId}.token`, playerToken);
+    }
+  });
+
+  socket.on('partyState', ({ room }) => {
+    if (!room) return;
+    currentGameId = room.selectedGameId || currentGameId;
+    if (room.activeSessionId) currentSessionId = room.activeSessionId;
+  });
+
+  socket.on('gameStarted', ({ gameId, sessionId }) => {
+    if (currentSessionId && sessionId && currentSessionId !== sessionId) {
+      resetGameClientState();
+    }
+    currentGameId = gameId || currentGameId;
+    currentSessionId = sessionId || currentSessionId;
+    currentSnapshotVersion = -1;
+  });
+
+  socket.on('gameSnapshot', applyGameSnapshot);
+
   // 玩家加入/离开
   socket.on('playerJoined', ({ players, count, mode }) => {
     pendingJoin = false;
@@ -529,6 +1097,7 @@ function registerEvents() {
       gameMode = mode;
       updateModeDisplay(mode);
     }
+	rememberLastSession();
     updateStartGameButton(players);
     // 如果在游戏界面，更新玩家列表
     if (currentPhase) {
@@ -537,16 +1106,23 @@ function registerEvents() {
   });
 
   // 角色揭示
-  socket.on('rolesRevealed', ({ role, roleLabel, roleDescription, players }) => {
+  socket.on('rolesRevealed', ({ role, roleLabel, roleDescription, players, reconnected = false }) => {
     rememberPlayers(players);
     myRole = role;
     document.getElementById('myRole').textContent = roleLabel;
-    voteHistory = [];
-    signalHistory = [];
-    suspicionTimeline = [];
-    discussionFocus = [];
-    updateDiscussionFocus([]);
-    renderSuspicionTimeline();
+	const waitingStartButton = document.getElementById('startGameBtn');
+	if (waitingStartButton) waitingStartButton.disabled = true;
+    if (!reconnected) {
+	  gameStartedAt = Date.now();
+	  messageCountByPlayer.clear();
+	  nominationHistory = [];
+      voteHistory = [];
+      signalHistory = [];
+      suspicionTimeline = [];
+      discussionFocus = [];
+      updateDiscussionFocus([]);
+      renderSuspicionTimeline();
+    }
     
     // 停止等待提示
     stopWaitingTips();
@@ -555,22 +1131,19 @@ function registerEvents() {
     if (gameMode === 'test' || gameMode === 'solo') {
       const watermark = document.getElementById('testModeWatermark');
       if (watermark) {
-        watermark.textContent = gameMode === 'test' ? '🧪 测试环境' : '🔧 单人调试';
+        const label = document.getElementById('testModeLabel');
+        if (label) label.textContent = gameMode === 'test' ? '🧪 测试环境' : '🔧 单人调试';
         watermark.classList.remove('hidden');
+        document.getElementById('testQuickAdvanceBtn')?.classList.toggle('hidden', gameMode !== 'test');
       }
     }
     
     // 初始化调试模式
     initDebugMode();
-    
-    // 显示角色揭示动画
-    showRoleReveal(role, roleLabel, roleDescription, () => {
-      showScreen('gameScreen');
-      renderGamePlayers(players);
-    });
 
-    // 初始化舞台小人
+    // 舞台会在游戏页仍隐藏时创建；真正显示后由 showScreen 再次测量宽度。
     if (window.PlayerStage && window.innerWidth > 768) {
+      if (stage) stage.destroy();
       stage = new PlayerStage('playerStage');
       stage.setPlayers(players.map(p => ({
         id: p.id,
@@ -580,6 +1153,19 @@ function registerEvents() {
       })));
       stage.startLoop();
     }
+
+    if (reconnected) {
+      showScreen('gameScreen');
+      renderGamePlayers(players);
+      showSuccess('已恢复本局身份和进度');
+      return;
+    }
+
+    // 显示角色揭示动画
+    showRoleReveal(role, roleLabel, roleDescription, () => {
+      showScreen('gameScreen');
+      renderGamePlayers(players);
+    });
   });
 
   // 阶段切换
@@ -587,13 +1173,29 @@ function registerEvents() {
     handlePhaseChange(data);
   });
 
+	socket.on('chatHistory', ({ messages = [] }) => {
+		const container = document.getElementById('chatMessages');
+		if (container) container.innerHTML = '';
+		messages.forEach(message => {
+			addChatMessage(message.playerName, message.displayed, message.playerId === myId);
+			if (message.playerId) {
+				messageCountByPlayer.set(message.playerId, (messageCountByPlayer.get(message.playerId) || 0) + 1);
+			}
+		});
+	});
+
+	socket.on('autoManaged', ({ message }) => {
+		showToast(`⏳ ${message}`, 4000);
+	});
+
   // 小队提名
-  socket.on('missionProposed', ({ leaderId, leaderName, memberIds, memberNames }) => {
+  socket.on('missionProposed', ({ leaderId, leaderName, memberIds, memberNames, reason }) => {
     rememberPlayerNames(memberIds, memberNames);
     if (leaderId && leaderName) playerNameById.set(leaderId, leaderName);
     document.getElementById('leaderName').textContent = leaderName;
     proposedTeamIds = memberIds;
     renderProposedTeam(memberNames);
+    renderNominationReason(reason);
     showToast(`${leaderName} 提名了小队`, 2000);
 
     // 舞台：队长指向被提名者
@@ -603,15 +1205,9 @@ function registerEvents() {
   });
 
   // 聊天消息
-  socket.on('chat', ({ playerId, playerName, message, messagesLeft: left, possessed, isPossessed }) => {
+  socket.on('chat', ({ playerId, playerName, message }) => {
     addChatMessage(playerName, message, playerId === myId);
-    if (playerId === myId) {
-      messagesLeft = left;
-      updateMsgCounter();
-      if ((possessed || isPossessed) && Date.now() >= possessionToastMutedUntil) {
-        showToast('⚠️ 你的发言受到了AI信号干扰', 2500, { key: 'possessed_chat', dedupeMs: 2000 });
-      }
-    }
+    messageCountByPlayer.set(playerId, (messageCountByPlayer.get(playerId) || 0) + 1);
 
     // 舞台：发言者弹跳
     if (stage) {
@@ -620,6 +1216,21 @@ function registerEvents() {
         if (stage) stage.setAnimation(playerId, 'idle');
       }, 1000);
     }
+  });
+
+  socket.on('chatReceipt', ({ messagesLeft: left, possessed }) => {
+    if (typeof left === 'number') {
+      messagesLeft = left;
+      updateMsgCounter();
+    }
+    if (possessed && Date.now() >= possessionToastMutedUntil) {
+      showToast('⚠️ 你的发言受到了AI信号干扰', 2500, { key: 'possessed_chat', dedupeMs: 2000 });
+    }
+  });
+
+  socket.on('stanceUpdated', ({ stances }) => {
+    currentStances = stances || {};
+    renderStances(currentStances);
   });
 
   // 小队投票结果
@@ -749,9 +1360,13 @@ function registerEvents() {
     disableChat('旁观小队行动，等待揭晓结果');
   });
 
-  socket.on('missionSubPhase', ({ subPhase, timeLimit, maxMessages, maxChars }) => {
+  socket.on('missionSubPhase', ({ subPhase, timeLimit, deadlineAt, maxMessages, maxChars }) => {
     puzzleSubPhase = subPhase;
-    startTimer(timeLimit);
+    if (isPaused) {
+      showPausedTimer();
+    } else {
+      startTimer(timeLimit, deadlineAt);
+    }
     if (subPhase === 'discuss') {
       if (isOnMissionTeam) {
         enablePuzzleChat(maxMessages, maxChars);
@@ -772,6 +1387,20 @@ function registerEvents() {
     if (subPhase === 'reveal') {
       disableChat('任务结果揭晓中');
     }
+  });
+
+  socket.on('debugPauseState', ({ paused, remainingSeconds, deadlineAt }) => {
+    isPaused = !!paused;
+    updatePauseButton();
+    updateGameStatusDisplay();
+    if (isPaused) {
+      if (timerInterval) clearInterval(timerInterval);
+      showPausedTimer();
+      addDebugLog('游戏已暂停', 'warning');
+      return;
+    }
+    startTimer(remainingSeconds || 0, deadlineAt || 0);
+    addDebugLog('游戏已继续', 'success');
   });
 
   socket.on('puzzleChatBroadcast', ({ playerId, playerName, message, messagesLeft: left }) => {
@@ -803,13 +1432,35 @@ function registerEvents() {
   });
 
   // 游戏结束
-  socket.on('gameFinished', ({ winner, winnerLabel, roles, missionResults }) => {
-    handleGameFinished(winner, winnerLabel, roles, missionResults);
+  socket.on('gameFinished', ({ winner, winnerLabel, roles, missionResults, voteHistory: serverVotes,
+    signalHistory: serverSignals, nominationHistory: serverNominations, stances }) => {
+    voteHistory = serverVotes || voteHistory;
+    signalHistory = serverSignals || signalHistory;
+    nominationHistory = serverNominations || nominationHistory;
+    handleGameFinished(winner, winnerLabel, roles, missionResults, stances || {});
   });
 
   // 房间重置
-  socket.on('roomReset', () => {
-    location.reload();
+  socket.on('roomReset', ({ players = [], mode, rematch = false } = {}) => {
+    if (!rematch) {
+      location.reload();
+      return;
+    }
+    resetGameClientState();
+    currentSessionId = '';
+    waitingPlayers = players;
+    if (mode) gameMode = mode;
+    hideAllActions();
+    hidePuzzleUI();
+    showScreen('waitingScreen');
+    renderWaitingPlayers(players);
+    updateStartGameButton(players);
+    startWaitingTips();
+	if (gameMode === 'test' || gameMode === 'solo') {
+		showSuccess('正在重新补齐 AI 并开始下一局');
+	} else {
+		showSuccess('原班已回到房间，房主可开始新一局');
+	}
   });
 
   // 错误
@@ -824,6 +1475,10 @@ function registerEvents() {
   // 断开连接
   socket.on('disconnect', (reason) => {
     console.log('断开连接:', reason);
+    if (intentionalDisconnect) {
+      intentionalDisconnect = false;
+      return;
+    }
     if (reason === 'io server disconnect') {
       showError('服务器断开连接，请刷新页面重试');
     } else {
@@ -832,18 +1487,6 @@ function registerEvents() {
     }
   });
   
-  // 重新连接
-  socket.on('reconnect', () => {
-    showSuccess('重新连接成功');
-    // 重新加入房间
-    if (currentRoomId && myName) {
-      socket.emit('joinRoom', {
-        roomId: currentRoomId,
-        name: myName,
-        mode: gameMode
-      });
-    }
-  });
 }
 
 // ═══════════════════════════════════════
@@ -852,9 +1495,13 @@ function registerEvents() {
 function handlePhaseChange(data) {
   const { phase, roundNumber, totalRounds, leader, teamSize,
     proposedTeam, proposedTeamNames, missionResults,
-    maxMessages: mm, maxChars: mc, timeLimit } = data;
+    maxMessages: mm, maxChars: mc, timeLimit, deadlineAt, nominationReason } = data;
 
-  currentPhase = phase;
+	const previousPhase = currentPhase;
+	const stanceDraft = captureStanceDraft();
+	const stanceFocus = captureInputFocus(['trustPlayerSelect', 'suspectPlayerSelect', 'stanceReasonInput']);
+	currentPhase = phase;
+	currentRoundNumber = roundNumber;
   document.body.dataset.phase = phase;
   
   const roundInfo = document.getElementById('roundInfo');
@@ -871,7 +1518,19 @@ function handlePhaseChange(data) {
 
   // 清除旧定时器
   if (timerInterval) clearInterval(timerInterval);
-  startTimer(timeLimit);
+  if (isPaused) {
+    showPausedTimer();
+  } else {
+    startTimer(timeLimit, deadlineAt);
+  }
+
+	if (leader) {
+		const leaderName = document.getElementById('leaderName');
+		if (leaderName) leaderName.textContent = leader.name || '--';
+	}
+	if (proposedTeam) proposedTeamIds = proposedTeam;
+	if (proposedTeamNames) renderProposedTeam(proposedTeamNames);
+	if (nominationReason) renderNominationReason(nominationReason);
 
   // 隐藏所有操作按钮
   hideAllActions();
@@ -944,6 +1603,18 @@ function handlePhaseChange(data) {
       if (proposedTeamNames) {
         renderProposedTeam(proposedTeamNames);
       }
+      renderNominationReason(nominationReason);
+      populateStanceSelectors();
+	  if (previousPhase === 'propose') {
+		stanceSubmittedRound = 0;
+		clearStanceDraft();
+	  } else {
+		restoreStanceDraft(stanceDraft);
+	  }
+	  updateStanceActionHint('公开你的当轮判断');
+      const stanceActions = document.getElementById('stanceActions');
+      if (stanceActions) stanceActions.classList.remove('hidden');
+      updateActionBarVisibility();
       const nextFocus = buildDiscussFocus(proposedTeamNames || []);
       if (discussionFocus.length > 0 && suspicionTimeline.length > 0) {
         updateDiscussionFocus([...discussionFocus.slice(0, 2), ...nextFocus]);
@@ -966,6 +1637,15 @@ function handlePhaseChange(data) {
       
       const voteActions = document.getElementById('voteActions');
       if (voteActions) voteActions.classList.remove('hidden');
+	  if (stanceSubmittedRound !== roundNumber) {
+		populateStanceSelectors();
+		restoreStanceDraft(stanceDraft);
+		const stanceActions = document.getElementById('stanceActions');
+		if (stanceActions) stanceActions.classList.remove('hidden');
+		updateStanceActionHint('投票已开始 · 可先完成这条判断');
+		showPhaseTransitionNotice('队伍投票已开始，你填写的判断已保留，可先提交理由再投票。');
+		restoreInputFocus(stanceFocus);
+	  }
       updateActionBarVisibility();
 
       // 舞台：所有人举手投票
@@ -1040,7 +1720,7 @@ function sendChat() {
       showToast('任务讨论消息已用完', 2000);
       return;
     }
-    socket.emit('puzzleChat', { roomId: currentRoomId, message: msg });
+    socket.emit('puzzleChat', { roomId: currentRoomId, sessionId: currentSessionId, message: msg });
     puzzleMessagesLeft--;
     input.value = '';
     input.placeholder = `任务讨论（${puzzleMessagesLeft}/${puzzleMaxMessages}）...`;
@@ -1059,7 +1739,7 @@ function sendChat() {
     return;
   }
 
-  socket.emit('chat', { roomId: currentRoomId, message: msg });
+  socket.emit('chat', { roomId: currentRoomId, sessionId: currentSessionId, message: msg });
   input.value = '';
   input.focus();
 }
@@ -1130,30 +1810,120 @@ function toggleMemberSelection(playerId) {
 
 function updateProposeBtn() {
   const btn = document.getElementById('confirmProposeBtn');
-  btn.disabled = selectedMembers.length !== teamSizeNeeded;
+  const reason = document.getElementById('nominationReasonInput')?.value.trim() || '';
+  btn.disabled = selectedMembers.length !== teamSizeNeeded || !reason;
 }
 
 function confirmPropose() {
-  if (selectedMembers.length !== teamSizeNeeded) return;
-  socket.emit('proposeMission', { roomId: currentRoomId, memberIds: selectedMembers });
+  const reason = document.getElementById('nominationReasonInput')?.value.trim() || '';
+  if (selectedMembers.length !== teamSizeNeeded || !reason) {
+    showToast('请选好小队并填写提名理由');
+    return;
+  }
+  socket.emit('proposeMission', { roomId: currentRoomId, sessionId: currentSessionId, memberIds: selectedMembers, reason });
   hideAllActions();
+}
+
+function captureStanceDraft() {
+	return {
+		trustId: document.getElementById('trustPlayerSelect')?.value || '',
+		suspectId: document.getElementById('suspectPlayerSelect')?.value || '',
+		reason: document.getElementById('stanceReasonInput')?.value || ''
+	};
+}
+
+function restoreStanceDraft(draft = {}) {
+	const trust = document.getElementById('trustPlayerSelect');
+	const suspect = document.getElementById('suspectPlayerSelect');
+	const reason = document.getElementById('stanceReasonInput');
+	if (trust && [...trust.options].some(option => option.value === draft.trustId)) trust.value = draft.trustId;
+	if (suspect && [...suspect.options].some(option => option.value === draft.suspectId)) suspect.value = draft.suspectId;
+	if (reason) reason.value = draft.reason || '';
+}
+
+function clearStanceDraft() {
+	const trust = document.getElementById('trustPlayerSelect');
+	const suspect = document.getElementById('suspectPlayerSelect');
+	const reason = document.getElementById('stanceReasonInput');
+	if (trust) trust.value = '';
+	if (suspect) suspect.value = '';
+	if (reason) reason.value = '';
+}
+
+function captureInputFocus(inputIds) {
+	const active = document.activeElement;
+	if (!active || !inputIds.includes(active.id)) return null;
+	return {
+		id: active.id,
+		selectionStart: typeof active.selectionStart === 'number' ? active.selectionStart : null,
+		selectionEnd: typeof active.selectionEnd === 'number' ? active.selectionEnd : null
+	};
+}
+
+function restoreInputFocus(focus) {
+	if (!focus) return;
+	requestAnimationFrame(() => {
+		const input = document.getElementById(focus.id);
+		if (!input || input.closest('.hidden')) return;
+		input.focus({ preventScroll: true });
+		if (focus.selectionStart !== null && typeof input.setSelectionRange === 'function') {
+			input.setSelectionRange(focus.selectionStart, focus.selectionEnd);
+		}
+	});
+}
+
+function updateStanceActionHint(message) {
+	const hint = document.getElementById('stanceActionHint');
+	if (hint) hint.textContent = message;
+}
+
+function showPhaseTransitionNotice(message) {
+	const notice = document.getElementById('phaseTransitionNotice');
+	if (!notice) return;
+	notice.textContent = message;
+	notice.classList.remove('hidden');
+}
+
+function submitStance() {
+  const trustId = document.getElementById('trustPlayerSelect')?.value || '';
+  const suspectId = document.getElementById('suspectPlayerSelect')?.value || '';
+  const reason = document.getElementById('stanceReasonInput')?.value.trim() || '';
+  if (!trustId || !suspectId || trustId === suspectId || !reason) {
+    showToast('请选择不同的信任/怀疑对象并说明理由');
+    return;
+  }
+  socket.emit('submitStance', { roomId: currentRoomId, sessionId: currentSessionId, trustId, suspectId, reason });
+	stanceSubmittedRound = currentRoundNumber;
+	clearStanceDraft();
+  document.getElementById('stanceActions')?.classList.add('hidden');
+  updateActionBarVisibility();
+  showToast('已公开本轮立场');
 }
 
 // ═══════════════════════════════════════
 //  投票系统
 // ═══════════════════════════════════════
 function submitTeamVote(approve) {
-  socket.emit('teamVote', { roomId: currentRoomId, approve });
-  hideAllActions();
+  socket.emit('teamVote', { roomId: currentRoomId, sessionId: currentSessionId, approve });
+	document.getElementById('voteActions')?.classList.add('hidden');
+	const notice = document.getElementById('phaseTransitionNotice');
+	if (notice) notice.classList.add('hidden');
+	updateActionBarVisibility();
   showToast(approve ? '已投同意' : '已投反对', 1500);
 }
 
 function submitMissionVote(success) {
   socket.emit('missionVote', {
     roomId: currentRoomId,
+    sessionId: currentSessionId,
     action: success ? 'support' : 'sabotage',
   });
-  hideAllActions();
+  const status = document.getElementById('missionSubmissionStatus');
+  if (status) {
+    status.textContent = `${success ? '✓ 已执行任务' : '! 已选择破坏'} · 等待其他队员提交`;
+    status.classList.remove('hidden');
+  }
+  document.querySelectorAll('.puzzle-opt').forEach(button => { button.disabled = true; });
   showToast(success ? '已秘密执行任务' : '已秘密破坏任务', 1500);
 }
 
@@ -1488,8 +2258,8 @@ function updateStartGameButton(players = []) {
   const hint = document.getElementById('startGameHint');
   if (!btn) return;
 
-  const humanCount = players.filter(p => !p.isAI).length;
-  const host = players[0];
+  const humanCount = players.filter(p => !p.isAI && !p.disconnected).length;
+  const host = players.find(p => !p.isAI && !p.disconnected && !p.eliminated);
   const isHost = host && host.id === myId;
 
   btn.classList.toggle('hidden', gameMode !== 'normal');
@@ -1503,7 +2273,7 @@ function updateStartGameButton(players = []) {
   if (!isHost) {
     btn.disabled = true;
     btn.textContent = '等待房主开始';
-    if (hint) hint.textContent = host ? `房主 ${host.name} 可在 5 人到齐后开始。` : '首位玩家可在 5 人到齐后开始。';
+    if (hint) hint.textContent = host ? `房主 ${host.name} 可在 3 名真人到齐后开始。` : '首位玩家可在 3 名真人到齐后开始。';
     return;
   }
 
@@ -1511,13 +2281,16 @@ function updateStartGameButton(players = []) {
     const missing = MIN_PLAYERS - humanCount;
     btn.disabled = true;
     btn.textContent = `还差 ${missing} 人`;
-    if (hint) hint.textContent = `当前 ${humanCount} 人，至少 ${MIN_PLAYERS} 人才能开始；最多 ${MAX_PLAYERS} 人。`;
+    if (hint) hint.textContent = `当前 ${humanCount} 人，至少 ${MIN_PLAYERS} 名真人可开局。`;
     return;
   }
 
   btn.disabled = false;
-  btn.textContent = '开始游戏';
-  if (hint) hint.textContent = `人数已满足：当前 ${humanCount} 人，最多 ${MAX_PLAYERS} 人。`;
+  const aiFill = Math.max(0, FULL_PLAYERS - humanCount);
+  btn.textContent = aiFill > 0 ? `开始游戏（补 ${aiFill} AI）` : '开始游戏';
+  if (hint) hint.textContent = aiFill > 0
+    ? `当前 ${humanCount} 名真人，开局时自动补至 ${FULL_PLAYERS} 人。`
+    : `人数已满足：当前 ${humanCount} 人，最多 ${MAX_PLAYERS} 人。`;
 }
 
 // 玩家列表缓存（用于事件委托）
@@ -1555,7 +2328,8 @@ function renderGamePlayers(players) {
     if (isOnTeam) cls += ' on-team';
     if (isSelected) cls += ' selected';
     if (p.eliminated) cls += ' eliminated';
-    if (isLeader && currentPhase === 'propose' && !isMe && !p.eliminated) cls += ' clickable';
+    if (p.disconnected) cls += ' disconnected';
+    if (isLeader && currentPhase === 'propose' && !isMe && !p.eliminated && !p.disconnected) cls += ' clickable';
     
     const playerElement = document.createElement('div');
     playerElement.className = cls;
@@ -1579,6 +2353,13 @@ function renderGamePlayers(players) {
       elimTag.textContent = '❌';
       playerElement.appendChild(elimTag);
     }
+
+    if (p.disconnected) {
+      const offlineTag = document.createElement('span');
+      offlineTag.className = 'offline-tag';
+      offlineTag.textContent = '离线·托管';
+      playerElement.appendChild(offlineTag);
+    }
     
     fragment.appendChild(playerElement);
   });
@@ -1601,11 +2382,49 @@ function renderProposedTeam(names) {
   ).join('');
 }
 
+function renderNominationReason(reason) {
+  const element = document.getElementById('nominationReason');
+  if (!element) return;
+  element.textContent = reason ? `队长理由：${reason}` : '等待队长说明提名理由';
+}
+
+function populateStanceSelectors() {
+  const candidates = cachedPlayers.filter(player =>
+	player.id !== myId &&
+	!player.eliminated && !player.disconnected
+  );
+  const trust = document.getElementById('trustPlayerSelect');
+  const suspect = document.getElementById('suspectPlayerSelect');
+  if (!trust || !suspect) return;
+  const options = candidates.map(player =>
+    `<option value="${escapeHtml(player.id)}">${escapeHtml(player.name)}</option>`
+  ).join('');
+  trust.innerHTML = `<option value="">最信任谁？</option>${options}`;
+  suspect.innerHTML = `<option value="">最怀疑谁？</option>${options}`;
+}
+
+function renderStances(stances) {
+  const container = document.getElementById('stanceList');
+  if (!container) return;
+  const records = Object.values(stances || {});
+  if (records.length === 0) {
+    container.innerHTML = '<div class="stance-item muted">暂无公开立场</div>';
+    return;
+  }
+  container.innerHTML = records.map(record => `
+    <div class="stance-item">
+      <strong>${escapeHtml(record.playerName)}</strong>
+      → 🤝 ${escapeHtml(record.trustName)} / 🔍 ${escapeHtml(record.suspectName)}
+      <br><small>${escapeHtml(record.reason)}</small>
+    </div>
+  `).join('');
+}
+
 function renderMissionDots(results) {
   const container = document.getElementById('missionDots');
   if (!container) return;
   let html = '';
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 5; i++) {
     if (i < results.length) {
       html += `<span class="dot ${results[i] ? 'success' : 'fail'}">${results[i] ? '✅' : '❌'}</span>`;
     } else {
@@ -1630,8 +2449,9 @@ function updatePlayerSelectionUI() {
 // ═══════════════════════════════════════
 //  游戏结束
 // ═══════════════════════════════════════
-function handleGameFinished(winner, winnerLabel, roles, missionResults) {
+function handleGameFinished(winner, winnerLabel, roles, missionResults, allStances = {}) {
   currentPhase = null;
+  lastGameSummary = { winner, winnerLabel, roles, missionResults };
 
   // 舞台：胜利方跳舞
   if (stage) {
@@ -1690,19 +2510,19 @@ function handleGameFinished(winner, winnerLabel, roles, missionResults) {
   updateGameStats({
     duration: calculateGameDuration(),
     voteRounds: voteHistory ? voteHistory.length : 0,
-    chatMessages: document.querySelectorAll('.chat-msg').length,
+    chatMessages: [...messageCountByPlayer.values()].reduce((total, count) => total + count, 0),
     possessionCount: signalHistory ? signalHistory.filter(r => r.hasPossession).length : 0
   });
   
   // 更新MVP评选
   updateMVPs({
-    reasoning: findMVPReasoning(roles),
-    acting: findMVPActing(roles),
+    reasoning: findMVPReasoning(roles, allStances),
+    acting: findMVPActing(roles, allStances),
     chatter: findMVPChatter()
   });
   
   // 添加关键事件
-  addKeyGameEvents();
+  addKeyGameEvents(allStances);
 }
 
 // 填充游戏回顾（匿名化）
@@ -1747,17 +2567,27 @@ function fillGameReview() {
 // ═══════════════════════════════════════
 //  计时器
 // ═══════════════════════════════════════
-function startTimer(seconds) {
-  timerValue = seconds;
+function startTimer(seconds, deadlineAt = 0) {
+  const serverRemaining = deadlineAt
+    ? Math.max(0, Math.ceil((Number(deadlineAt) - Date.now()) / 1000))
+    : Number(seconds || 0);
+  timerValue = serverRemaining;
   updateTimerDisplay();
   if (timerInterval) clearInterval(timerInterval);
   timerInterval = setInterval(() => {
-    timerValue--;
+    timerValue = deadlineAt
+      ? Math.max(0, Math.ceil((Number(deadlineAt) - Date.now()) / 1000))
+      : Math.max(0, timerValue - 1);
     updateTimerDisplay();
     if (timerValue <= 0) {
       clearInterval(timerInterval);
     }
   }, 1000);
+}
+
+function showPausedTimer() {
+  const timer = document.getElementById('timer');
+  if (timer) timer.textContent = '⏸ 已暂停';
 }
 
 function updateTimerDisplay() {
@@ -1773,22 +2603,44 @@ function updateTimerDisplay() {
 //  工具函数
 // ═══════════════════════════════════════
 function showScreen(screenId) {
+  const previousScreenId = document.body.dataset.screen;
   document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
   const screen = document.getElementById(screenId);
   if (screen) screen.classList.remove('hidden');
   document.body.dataset.screen = screenId;
+
+  if (previousScreenId !== screenId) {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    if (screenId === 'loginScreen') {
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = null;
+      document.getElementById('toast')?.classList.add('hidden');
+      lastToastMeta = { key: '', shownAt: 0 };
+    }
+  }
+
+  if (screenId === 'gameScreen') {
+    requestAnimationFrame(() => {
+      stage?.resize();
+      updateActionBarVisibility();
+    });
+  }
 }
 
 function hideAllActions() {
   const proposeActions = document.getElementById('proposeActions');
   const voteActions = document.getElementById('voteActions');
   const missionActions = document.getElementById('missionActions');
+  const stanceActions = document.getElementById('stanceActions');
   const sabotageBtn = document.getElementById('sabotageBtn');
+	const transitionNotice = document.getElementById('phaseTransitionNotice');
   
   if (proposeActions) proposeActions.classList.add('hidden');
   if (voteActions) voteActions.classList.add('hidden');
   if (missionActions) missionActions.classList.add('hidden');
+  if (stanceActions) stanceActions.classList.add('hidden');
   if (sabotageBtn) sabotageBtn.classList.add('hidden');
+	if (transitionNotice) transitionNotice.classList.add('hidden');
   updateActionBarVisibility();
 }
 
@@ -1801,6 +2653,14 @@ function updateActionBarVisibility() {
 
   actionBar.classList.toggle('hidden', !hasVisibleAction);
   document.body.classList.toggle('has-action-bar', hasVisibleAction);
+  if (!hasVisibleAction) {
+    document.body.style.removeProperty('--action-bar-height');
+    return;
+  }
+
+  requestAnimationFrame(() => {
+    document.body.style.setProperty('--action-bar-height', `${Math.ceil(actionBar.getBoundingClientRect().height)}px`);
+  });
 }
 
 function showToast(msg, duration = 3000, options = {}) {
@@ -1906,6 +2766,11 @@ function showPuzzle(puzzle, context = {}) {
       btn.disabled = true;
     }
   });
+  const submissionStatus = document.getElementById('missionSubmissionStatus');
+  if (submissionStatus) {
+    submissionStatus.textContent = '';
+    submissionStatus.classList.add('hidden');
+  }
   if (sabotageBtn) {
     sabotageBtn.classList.toggle('hidden', !canSabotage);
   }
@@ -1942,6 +2807,12 @@ function handlePuzzleOptionClick(e) {
   // 自动提交
   socket.emit('missionVote', { roomId: currentRoomId, action: missionAction });
   showToast(missionAction === 'sabotage' ? '已秘密破坏任务' : '已秘密执行任务', 1500);
+
+  const status = document.getElementById('missionSubmissionStatus');
+  if (status) {
+    status.textContent = `${missionAction === 'sabotage' ? '! 已选择破坏' : '✓ 已执行任务'} · 等待其他队员提交`;
+    status.classList.remove('hidden');
+  }
 
   // 禁用所有选项
   document.querySelectorAll('.puzzle-opt').forEach(b => b.disabled = true);
@@ -2039,6 +2910,7 @@ function initDebugMode() {
     
     // 监听服务器事件以获取AI状态
     setupDebugSocketListeners();
+	requestDebugState();
   }
 }
 
@@ -2051,7 +2923,11 @@ function showDebugPanel() {
     panel.classList.remove('hidden');
     panel.classList.add('collapsed');
     const toggle = document.querySelector('.debug-toggle');
-    if (toggle) toggle.textContent = '▲';
+	if (toggle) {
+	  toggle.textContent = '▲';
+	  toggle.setAttribute('aria-label', '展开调试面板');
+	  toggle.setAttribute('aria-expanded', 'false');
+	}
     addDebugLog('调试面板已显示', 'info');
   }
 }
@@ -2074,7 +2950,10 @@ function toggleDebugPanel() {
   const toggle = document.querySelector('.debug-toggle');
   if (panel && toggle) {
     panel.classList.toggle('collapsed');
-    toggle.textContent = panel.classList.contains('collapsed') ? '▲' : '▼';
+	const collapsed = panel.classList.contains('collapsed');
+	toggle.textContent = collapsed ? '▲' : '▼';
+	toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+	toggle.setAttribute('aria-label', collapsed ? '展开调试面板' : '折叠调试面板');
   }
 }
 
@@ -2117,28 +2996,15 @@ function updateDebugLogDisplay() {
  * 切换暂停/继续
  */
 function togglePause() {
-  isPaused = !isPaused;
+  if (!socket || gameMode !== 'solo') return;
+  socket.emit('debugPause', { roomId: currentRoomId, sessionId: currentSessionId, paused: !isPaused });
+}
+
+function updatePauseButton() {
   const btn = document.getElementById('pauseBtn');
-  
-  if (isPaused) {
-    btn.textContent = '▶️ 继续';
-    btn.classList.add('paused');
-    addDebugLog('游戏已暂停', 'warning');
-    
-    // 发送暂停事件到服务器
-    if (socket) {
-      socket.emit('debugPause', { roomId: currentRoomId, paused: true });
-    }
-  } else {
-    btn.textContent = '⏸️ 暂停';
-    btn.classList.remove('paused');
-    addDebugLog('游戏已继续', 'success');
-    
-    // 发送继续事件到服务器
-    if (socket) {
-      socket.emit('debugPause', { roomId: currentRoomId, paused: false });
-    }
-  }
+  if (!btn) return;
+  btn.textContent = isPaused ? '▶️ 继续' : '⏸️ 暂停';
+  btn.classList.toggle('paused', isPaused);
 }
 
 /**
@@ -2148,8 +3014,18 @@ function skipPhase() {
   addDebugLog('跳过当前阶段', 'info');
   
   if (socket) {
-    socket.emit('debugSkipPhase', { roomId: currentRoomId });
+    socket.emit('debugSkipPhase', { roomId: currentRoomId, sessionId: currentSessionId });
   }
+}
+
+function requestDebugState() {
+	if (!socket || !currentRoomId || gameMode !== 'solo') return;
+	socket.emit('debugRequestState', { roomId: currentRoomId, sessionId: currentSessionId });
+}
+
+function setDebugMissionResult(success) {
+	if (!socket || !currentRoomId || gameMode !== 'solo') return;
+	socket.emit('debugSetMissionResult', { roomId: currentRoomId, sessionId: currentSessionId, success });
 }
 
 /**
@@ -2212,13 +3088,14 @@ function updateGameStatusDisplay() {
     html = `
       <p><span class="label">房间ID:</span> <span class="value">${escapeHtml(gameRoom.roomId || '未知')}</span></p>
       <p><span class="label">游戏状态:</span> <span class="value">${gameRoom.status || '未知'}</span></p>
-      <p><span class="label">当前阶段:</span> <span class="value">${currentPhase || '未知'}</span></p>
+	  <p><span class="label">当前阶段:</span> <span class="value">${gameRoom.currentPhase || currentPhase || '未知'}${gameRoom.missionSubPhase ? ` · ${gameRoom.missionSubPhase}` : ''}</span></p>
       <p><span class="label">当前轮次:</span> <span class="value">${gameRoom.currentRound || 0}/${gameRoom.maxRounds || 5}</span></p>
       <p><span class="label">任务成功:</span> <span class="value">${gameRoom.missionSuccesses || 0}</span></p>
       <p><span class="label">任务失败:</span> <span class="value">${gameRoom.missionFailures || 0}</span></p>
       <p><span class="label">当前队长:</span> <span class="value">${gameRoom.currentLeaderName || '未知'}</span></p>
       <p><span class="label">已提名:</span> <span class="value">${gameRoom.proposedTeam ? gameRoom.proposedTeam.length : 0}人</span></p>
-      <p><span class="label">暂停状态:</span> <span class="value">${isPaused ? '已暂停' : '运行中'}</span></p>
+	  <p><span class="label">指定任务结果:</span> <span class="value">${gameRoom.debugMissionResult || '未指定'}</span></p>
+      <p><span class="label">暂停状态:</span> <span class="value">${gameRoom.debugPaused || isPaused ? '已暂停' : '运行中'}</span></p>
     `;
   } else {
     html = '<p>游戏状态加载中...</p>';
@@ -2231,14 +3108,21 @@ function updateGameStatusDisplay() {
  * 设置调试模式Socket监听器
  */
 function setupDebugSocketListeners() {
-  if (!socket) return;
+	if (!socket || debugListenersReady) return;
+	debugListenersReady = true;
   
   // 监听游戏状态更新
   socket.on('gameStateUpdate', (state) => {
     gameRoom = state;
+    isPaused = !!state.debugPaused;
+    updatePauseButton();
     updateAIStatusDisplay();
     updateGameStatusDisplay();
-    addDebugLog('游戏状态已更新', 'info');
+	const stateKey = `${state.currentRound}:${state.currentPhase}:${state.missionSubPhase || ''}`;
+	if (stateKey !== lastDebugStateKey) {
+	  lastDebugStateKey = stateKey;
+	  addDebugLog(`状态更新：第${state.currentRound}轮 ${state.currentPhase}${state.missionSubPhase ? `/${state.missionSubPhase}` : ''}`, 'info');
+	}
   });
   
   // 监听AI状态更新
@@ -2278,7 +3162,8 @@ function updateDebugPanel() {
  */
 setInterval(() => {
   if (debugMode && !isPaused) {
-    updateDebugPanel();
+	requestDebugState();
+	updateDebugPanel();
   }
 }, 2000);
 
@@ -2315,13 +3200,18 @@ function shareRoom() {
  */
 function shareResult() {
   const resultTitle = document.getElementById('resultTitle').textContent;
-  const shareText = `我在「谁是AI」中${resultTitle}！来挑战我吧！`;
+  const results = lastGameSummary?.missionResults || [];
+  const successCount = results.filter(Boolean).length;
+  const failCount = results.length - successCount;
+  const myRoleLabel = lastGameSummary?.roles?.[myId]?.roleLabel || '神秘身份';
+  const inviteURL = buildRoomShareUrl(currentRoomId, gameMode || 'normal');
+  const shareText = `我在「谁是AI」中拿到 ${myRoleLabel}，${resultTitle}！任务 ${successCount}:${failCount}。\n${inviteURL}`;
   
   if (navigator.share) {
     navigator.share({
       title: '谁是AI - 游戏结果',
       text: shareText,
-      url: window.location.href
+      url: inviteURL
     }).catch(console.error);
   } else {
     navigator.clipboard.writeText(shareText).then(() => {
@@ -2410,10 +3300,10 @@ function updateGameStats(stats) {
   if (!stats) return;
   
   const elements = {
-    'gameDuration': stats.duration || '--',
-    'voteRounds': stats.voteRounds || '--',
-    'chatMessages': stats.chatMessages || '--',
-    'possessionCount': stats.possessionCount || '--'
+	'gameDuration': stats.duration ?? '--',
+	'voteRounds': stats.voteRounds ?? '--',
+	'chatMessageCount': stats.chatMessages ?? '--',
+	'possessionCount': stats.possessionCount ?? '--'
   };
   
   Object.entries(elements).forEach(([id, value]) => {
@@ -2449,10 +3339,13 @@ function addKeyEvent(event) {
   
   const eventElement = document.createElement('div');
   eventElement.className = 'key-event';
-  eventElement.innerHTML = `
-    <span class="event-time">${event.time}</span>
-    <span class="event-desc">${event.description}</span>
-  `;
+  const time = document.createElement('span');
+  time.className = 'event-time';
+  time.textContent = event.time;
+  const description = document.createElement('span');
+  description.className = 'event-desc';
+  description.textContent = event.description;
+  eventElement.append(time, description);
   
   reviewKeyEvents.appendChild(eventElement);
 }
@@ -2595,6 +3488,8 @@ function showFunFact() {
  */
 function initUIOptimizations() {
   applyInitialRoomParams();
+	updateResumeGameButton();
+	loadPlatformGameCatalog();
 
   // 启动提示轮播
   startTipCarousel();
@@ -2631,68 +3526,74 @@ document.addEventListener('DOMContentLoaded', initUIOptimizations);
  * 计算游戏时长
  */
 function calculateGameDuration() {
-  // 这里应该记录游戏开始时间，然后计算时长
-  // 暂时返回一个模拟值
-  return '10分30秒';
+  if (!gameStartedAt) return '--';
+  const seconds = Math.max(0, Math.floor((Date.now() - gameStartedAt) / 1000));
+  return `${Math.floor(seconds / 60)}分${String(seconds % 60).padStart(2, '0')}秒`;
 }
 
 /**
  * 找到最佳推理MVP
  */
-function findMVPReasoning(roles) {
-  // 这里应该根据投票历史和推理准确性来判断
-  // 暂时返回第一个玩家
-  const players = Object.values(roles);
-  return players.length > 0 ? players[0].name : '--';
+function findMVPReasoning(roles, allStances) {
+  const score = new Map();
+  Object.values(allStances || {}).forEach(round => {
+    Object.values(round || {}).forEach(record => {
+      if (roles[record.suspectId]?.faction === 'evil') {
+        score.set(record.playerId, (score.get(record.playerId) || 0) + 1);
+      }
+    });
+  });
+  const winner = [...score.entries()].sort((a, b) => b[1] - a[1])[0];
+  return winner ? `${roles[winner[0]]?.name || playerNameById.get(winner[0])} · 命中${winner[1]}次` : '无有效表态';
 }
 
 /**
  * 找到最佳演技MVP
  */
-function findMVPActing(roles) {
-  // 这里应该根据AI附身和伪装能力来判断
-  // 暂时返回随机玩家
-  const players = Object.values(roles);
-  return players.length > 1 ? players[1].name : '--';
+function findMVPActing(roles, allStances) {
+  const trusted = new Map();
+  Object.values(allStances || {}).forEach(round => {
+    Object.values(round || {}).forEach(record => {
+      if (roles[record.trustId]?.faction === 'evil') {
+        trusted.set(record.trustId, (trusted.get(record.trustId) || 0) + 1);
+      }
+    });
+  });
+  const winner = [...trusted.entries()].sort((a, b) => b[1] - a[1])[0];
+  return winner ? `${roles[winner[0]]?.name || playerNameById.get(winner[0])} · 骗取${winner[1]}次信任` : '无有效数据';
 }
 
 /**
  * 找到话痨王MVP
  */
 function findMVPChatter() {
-  // 这里应该根据聊天消息数量来判断
-  // 暂时返回当前玩家
-  return myName || '--';
+  const winner = [...messageCountByPlayer.entries()].sort((a, b) => b[1] - a[1])[0];
+  return winner ? `${playerNameById.get(winner[0]) || '玩家'} · ${winner[1]}条` : '无发言数据';
 }
 
 /**
  * 添加关键游戏事件
  */
-function addKeyGameEvents() {
+function addKeyGameEvents(allStances = {}) {
   // 清空现有事件
   const reviewKeyEvents = document.getElementById('reviewKeyEvents');
   if (reviewKeyEvents) {
     reviewKeyEvents.innerHTML = '';
   }
   
-  // 添加一些关键事件示例
-  addKeyEvent({
-    time: '00:05',
-    description: '游戏开始，角色分配完成'
+  nominationHistory.forEach(record => addKeyEvent({
+    time: `R${record.round}`,
+    description: `${record.leaderName}提名 ${record.teamNames.join('、')}：${record.reason}`
+  }));
+  voteHistory.forEach(record => addKeyEvent({
+    time: `R${record.round}`,
+    description: `小队${record.approved ? '通过' : '被否决'}（${record.approveCount}:${record.rejectCount}）`
+  }));
+  Object.entries(allStances || {}).forEach(([round, records]) => {
+    const count = Object.keys(records || {}).length;
+    if (count > 0) addKeyEvent({ time: `R${round}`, description: `${count}人公开了信任/怀疑立场` });
   });
-  
-  addKeyEvent({
-    time: '02:30',
-    description: '第一次投票通过'
-  });
-  
-  addKeyEvent({
-    time: '05:15',
-    description: 'AI附身被检测到'
-  });
-  
-  addKeyEvent({
-    time: '08:45',
-    description: '关键任务执行'
-  });
+  if (reviewKeyEvents && !reviewKeyEvents.children.length) {
+    reviewKeyEvents.innerHTML = '<div class="review-item">本局无可记录的关键事件</div>';
+  }
 }

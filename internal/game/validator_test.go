@@ -70,3 +70,17 @@ func TestValidateChatMessage(t *testing.T) {
 		t.Fatal("ValidateChatMessage accepted an empty message")
 	}
 }
+
+func TestValidatePlayerToken(t *testing.T) {
+	t.Parallel()
+
+	const token = "player_0123456789abcdef"
+	if got, err := ValidatePlayerToken(token); err != nil || got != token {
+		t.Fatalf("ValidatePlayerToken(%q) = %q, %v", token, got, err)
+	}
+	for _, invalid := range []string{"short", "player token with spaces", "player_<script>_token"} {
+		if _, err := ValidatePlayerToken(invalid); err == nil {
+			t.Fatalf("ValidatePlayerToken(%q) succeeded, want error", invalid)
+		}
+	}
+}

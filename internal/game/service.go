@@ -5,6 +5,7 @@ import (
 	"math/rand"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type Event struct {
@@ -70,10 +71,22 @@ func (s *Service) StartGame(roomID, starterID string) (*Room, []Event, error) {
 	if room.Status == StatusPlaying {
 		return cloneRoom(room), nil, nil
 	}
+	connectedPlayers := room.Players[:0]
+	for _, player := range room.Players {
+		if player.Disconnected {
+			continue
+		}
+		player.Position = len(connectedPlayers)
+		connectedPlayers = append(connectedPlayers, player)
+	}
+	room.Players = connectedPlayers
 
 	humans := humanPlayers(room)
-	if room.Mode != ModeTest && room.Mode != ModeSolo && len(humans) < MinPlayers {
-		return nil, nil, errors.New("至少需要 5 名玩家才能开始")
+	if room.Mode != ModeTest && room.Mode != ModeSolo && len(humans) < 3 {
+		return nil, nil, errors.New("至少需要 3 名真人玩家")
+	}
+	if room.Mode != ModeTest && room.Mode != ModeSolo && len(room.Players) < MinPlayers {
+		return nil, nil, errors.New("人数不足 5 人时请开启 AI 补位")
 	}
 	if (room.Mode == ModeTest || room.Mode == ModeSolo) && len(humans) < 1 {
 		return nil, nil, errors.New("至少需要 1 名真人玩家")
@@ -87,9 +100,16 @@ func (s *Service) StartGame(roomID, starterID string) (*Room, []Event, error) {
 	room.MissionFailures = 0
 	room.ProposedTeam = []string{}
 	room.TeamVotes = map[string]bool{}
+	room.AutoTeamVotes = map[string]bool{}
+	room.AutoMissionVotes = map[string]bool{}
 	room.MessageCount = map[string]int{}
 	room.ChatMessages = []ChatMessage{}
 	room.SignalHistory = []SignalRecord{}
+	room.SuspicionEvents = []string{}
+	room.DiscussionFocus = []string{}
+	room.AutoManagedActions = map[string][]AutoManagedAction{}
+	room.StartedAtMillis = time.Now().UnixMilli()
+	room.EndedAtMillis = 0
 
 	humanIDs := make([]string, 0, len(humans))
 	for _, player := range humans {
@@ -119,6 +139,10 @@ func (s *Service) StartGame(roomID, starterID string) (*Room, []Event, error) {
 			},
 		})
 	}
+	proposeTimeLimit := phaseTimeLimit(room, PhasePropose)
+	// Reserve enough time for the identity card to be read before the first
+	// nomination countdown becomes urgent.
+	room.PhaseDeadline = phaseDeadline(proposeTimeLimit, 8)
 	events = append(events, Event{
 		Name:   "phaseChange",
 		RoomID: roomID,
@@ -127,9 +151,10 @@ func (s *Service) StartGame(roomID, starterID string) (*Room, []Event, error) {
 			"roundNumber":    room.CurrentRound,
 			"totalRounds":    MaxRounds,
 			"leader":         leaderPayload(room),
-			"teamSize":       MissionTeamSize(len(humans), room.CurrentRound),
+			"teamSize":       MissionTeamSize(len(roleIDs), room.CurrentRound),
 			"missionResults": room.MissionResults,
-			"timeLimit":      15,
+			"timeLimit":      proposeTimeLimit,
+			"deadlineAt":     room.PhaseDeadline,
 		},
 	})
 	events = append(events, possessionEvents(roomID, room)...)
@@ -167,14 +192,58 @@ func (s *Service) Chat(roomID, playerID, input string) (ChatMessage, int, error)
 	}
 	room.MessageCount[playerID]++
 	chatMessage := ChatMessage{
-		PlayerID:   playerID,
-		PlayerName: player.Name,
-		Original:   message,
-		Displayed:  displayed,
-		Possessed:  possessed,
+		PlayerID:        playerID,
+		PlayerName:      player.Name,
+		Original:        message,
+		Displayed:       displayed,
+		Possessed:       possessed,
+		Round:           room.CurrentRound,
+		Channel:         "discussion",
+		CreatedAtMillis: time.Now().UnixMilli(),
 	}
 	room.ChatMessages = append(room.ChatMessages, chatMessage)
 	return chatMessage, MaxMessagesPerRound - room.MessageCount[playerID], nil
+}
+
+func (s *Service) MissionChat(roomID, playerID, input string) (ChatMessage, int, error) {
+	message, err := ValidateChatMessage(input)
+	if err != nil {
+		return ChatMessage{}, 0, err
+	}
+
+	s.store.mu.Lock()
+	defer s.store.mu.Unlock()
+
+	room, ok := s.store.rooms[roomID]
+	if !ok {
+		return ChatMessage{}, 0, errors.New("房间不存在")
+	}
+	if room.CurrentPhase != PhaseMission || room.MissionSubPhase != "discuss" {
+		return ChatMessage{}, 0, errors.New("当前不是任务讨论阶段")
+	}
+	if !contains(room.ProposedTeam, playerID) {
+		return ChatMessage{}, 0, errors.New("只有行动小队成员可以发言")
+	}
+	player, ok := findPlayer(room, playerID)
+	if !ok {
+		return ChatMessage{}, 0, errors.New("玩家不在房间中")
+	}
+	key := "mission:" + playerID
+	if room.MessageCount[key] >= MaxMissionMessages {
+		return ChatMessage{}, 0, errors.New("本轮任务发言次数已用完")
+	}
+	room.MessageCount[key]++
+	chatMessage := ChatMessage{
+		PlayerID:        playerID,
+		PlayerName:      player.Name,
+		Original:        message,
+		Displayed:       message,
+		Round:           room.CurrentRound,
+		Channel:         "mission",
+		CreatedAtMillis: time.Now().UnixMilli(),
+	}
+	room.ChatMessages = append(room.ChatMessages, chatMessage)
+	return chatMessage, MaxMissionMessages - room.MessageCount[key], nil
 }
 
 func (s *Service) rewritePossessedMessage(message string, style Style) string {
@@ -189,6 +258,10 @@ func (s *Service) rewritePossessedMessage(message string, style Style) string {
 }
 
 func (s *Service) ProposeMission(roomID, proposerID string, memberIDs []string) (*Room, []Event, error) {
+	return s.ProposeMissionWithReason(roomID, proposerID, memberIDs, "队长未填写理由")
+}
+
+func (s *Service) ProposeMissionWithReason(roomID, proposerID string, memberIDs []string, inputReason string) (*Room, []Event, error) {
 	s.store.mu.Lock()
 	defer s.store.mu.Unlock()
 
@@ -202,28 +275,43 @@ func (s *Service) ProposeMission(roomID, proposerID string, memberIDs []string) 
 	if room.CurrentLeader != proposerID {
 		return nil, nil, errors.New("只有队长可以提名")
 	}
+	reason, err := ValidateSocialReason(inputReason)
+	if err != nil {
+		return nil, nil, err
+	}
 
-	humans := humanPlayers(room)
-	teamSize := MissionTeamSize(len(humans), room.CurrentRound)
+	teamSize := MissionTeamSize(len(alivePlayers(room)), room.CurrentRound)
 	if len(memberIDs) != teamSize {
 		return nil, nil, errors.New("提名人数不正确")
 	}
 	valid := map[string]bool{}
 	for _, player := range room.Players {
-		if !player.Eliminated && (room.Mode == ModeTest || room.Mode == ModeSolo || !player.IsAI) {
+		if !player.Eliminated {
 			valid[player.ID] = true
 		}
 	}
+	selected := make(map[string]bool, len(memberIDs))
 	for _, id := range memberIDs {
-		if !valid[id] {
+		if !valid[id] || selected[id] {
 			return nil, nil, errors.New("提名了无效的玩家")
 		}
+		selected[id] = true
 	}
 
 	room.ProposedTeam = append([]string(nil), memberIDs...)
+	room.NominationReason = reason
+	room.NominationHistory = append(room.NominationHistory, NominationRecord{
+		Round:      room.CurrentRound,
+		LeaderID:   proposerID,
+		LeaderName: playerName(room, proposerID),
+		Team:       append([]string(nil), memberIDs...),
+		TeamNames:  playerNames(room, memberIDs),
+		Reason:     reason,
+	})
 	room.CurrentPhase = PhaseDiscuss
 	room.MessageCount = map[string]int{}
-	room.ChatMessages = []ChatMessage{}
+	discussTimeLimit := phaseTimeLimit(room, PhaseDiscuss)
+	room.PhaseDeadline = phaseDeadline(discussTimeLimit, 0)
 
 	events := []Event{
 		{
@@ -234,6 +322,7 @@ func (s *Service) ProposeMission(roomID, proposerID string, memberIDs []string) 
 				"leaderName":  playerName(room, proposerID),
 				"memberIds":   memberIDs,
 				"memberNames": playerNames(room, memberIDs),
+				"reason":      reason,
 			},
 		},
 		{
@@ -248,14 +337,16 @@ func (s *Service) ProposeMission(roomID, proposerID string, memberIDs []string) 
 				"missionResults":    room.MissionResults,
 				"maxMessages":       MaxMessagesPerRound,
 				"maxChars":          MaxCharsPerMessage,
-				"timeLimit":         45,
+				"timeLimit":         discussTimeLimit,
+				"deadlineAt":        room.PhaseDeadline,
+				"nominationReason":  reason,
 			},
 		},
 	}
 	return cloneRoom(room), events, nil
 }
 
-func (s *Service) TeamVote(roomID, voterID string, approve bool) (*Room, []Event, error) {
+func (s *Service) SubmitStance(roomID, playerID, trustID, suspectID, inputReason string) (*Room, []Event, error) {
 	s.store.mu.Lock()
 	defer s.store.mu.Unlock()
 
@@ -263,18 +354,81 @@ func (s *Service) TeamVote(roomID, voterID string, approve bool) (*Room, []Event
 	if !ok {
 		return nil, nil, errors.New("房间不存在")
 	}
-	if room.CurrentPhase != PhaseTeamVote && room.CurrentPhase != PhaseDiscuss {
+	if room.CurrentPhase != PhaseDiscuss && room.CurrentPhase != PhaseTeamVote {
+		return nil, nil, errors.New("当前不是立场表态阶段")
+	}
+	if !playerCanVote(room, playerID) || trustID == suspectID || trustID == playerID || suspectID == playerID {
+		return nil, nil, errors.New("请选择不同的可信与怀疑对象")
+	}
+	if !playerCanVote(room, trustID) || !playerCanVote(room, suspectID) {
+		return nil, nil, errors.New("表态对象无效")
+	}
+	reason, err := ValidateSocialReason(inputReason)
+	if err != nil {
+		return nil, nil, err
+	}
+	if room.Stances == nil {
+		room.Stances = map[int]map[string]StanceRecord{}
+	}
+	if room.Stances[room.CurrentRound] == nil {
+		room.Stances[room.CurrentRound] = map[string]StanceRecord{}
+	}
+	record := StanceRecord{
+		Round:       room.CurrentRound,
+		PlayerID:    playerID,
+		PlayerName:  playerName(room, playerID),
+		TrustID:     trustID,
+		TrustName:   playerName(room, trustID),
+		SuspectID:   suspectID,
+		SuspectName: playerName(room, suspectID),
+		Reason:      reason,
+	}
+	room.Stances[room.CurrentRound][playerID] = record
+	event := Event{
+		Name:   "stanceUpdated",
+		RoomID: roomID,
+		Payload: map[string]any{
+			"roundNumber": room.CurrentRound,
+			"stances":     room.Stances[room.CurrentRound],
+		},
+	}
+	return cloneRoom(room), []Event{event}, nil
+}
+
+func (s *Service) TeamVote(roomID, voterID string, approve bool) (*Room, []Event, error) {
+	return s.teamVote(roomID, voterID, approve, false)
+}
+
+// AutoTeamVote records a server-managed vote so clients can distinguish it
+// from an intentional player choice.
+func (s *Service) AutoTeamVote(roomID, voterID string, approve bool) (*Room, []Event, error) {
+	return s.teamVote(roomID, voterID, approve, true)
+}
+
+func (s *Service) teamVote(roomID, voterID string, approve, autoManaged bool) (*Room, []Event, error) {
+	s.store.mu.Lock()
+	defer s.store.mu.Unlock()
+
+	room, ok := s.store.rooms[roomID]
+	if !ok {
+		return nil, nil, errors.New("房间不存在")
+	}
+	if room.CurrentPhase != PhaseTeamVote {
 		return nil, nil, errors.New("当前不是投票阶段")
 	}
 	if !playerCanVote(room, voterID) {
 		return nil, nil, errors.New("无效投票玩家")
 	}
-	room.CurrentPhase = PhaseTeamVote
 	room.TeamVotes[voterID] = approve
-	if room.Mode == ModeTest || room.Mode == ModeSolo {
+	if room.AutoTeamVotes == nil {
+		room.AutoTeamVotes = map[string]bool{}
+	}
+	room.AutoTeamVotes[voterID] = autoManaged
+	if hasAIPlayers(room) {
 		for _, player := range room.Players {
 			if player.IsAI && !player.Eliminated {
 				room.TeamVotes[player.ID] = aiTeamVote(room, player.ID)
+				room.AutoTeamVotes[player.ID] = true
 			}
 		}
 	}
@@ -291,7 +445,11 @@ func (s *Service) TeamVote(roomID, voterID string, approve bool) (*Room, []Event
 		if vote {
 			approveCount++
 		}
-		voteDisplay[player.ID] = PlayerVote{VoterName: player.Name, Approved: vote}
+		voteDisplay[player.ID] = PlayerVote{
+			VoterName:   player.Name,
+			Approved:    vote,
+			AutoManaged: room.AutoTeamVotes[player.ID],
+		}
 	}
 	approved := approveCount*2 > len(voters)
 	room.VoteHistory = append(room.VoteHistory, VoteRecord{
@@ -312,16 +470,17 @@ func (s *Service) TeamVote(roomID, voterID string, approve bool) (*Room, []Event
 			"approveCount": approveCount,
 			"rejectCount":  len(voters) - approveCount,
 			"votes":        voteDisplay,
-			"voteHistory":  room.VoteHistory,
+			"voteHistory":  publicVoteHistory(room.VoteHistory),
 		},
 	}}
-
 	if !approved {
 		room.RejectStreak++
 		room.TeamVotes = map[string]bool{}
+		room.AutoTeamVotes = map[string]bool{}
 		room.ProposedTeam = []string{}
 		if room.RejectStreak >= 5 {
 			room.Status = StatusFinished
+			room.EndedAtMillis = time.Now().UnixMilli()
 			events = append(events, gameFinishedEvent(roomID, room, "infiltrator"))
 			return cloneRoom(room), events, nil
 		}
@@ -333,9 +492,54 @@ func (s *Service) TeamVote(roomID, voterID string, approve bool) (*Room, []Event
 
 	room.RejectStreak = 0
 	room.CurrentPhase = PhaseMission
+	room.MissionSubPhase = "discuss"
 	room.MissionVotes = map[string]string{}
+	room.AutoMissionVotes = map[string]bool{}
 	events = append(events, missionStartEvents(roomID, room)...)
 	return cloneRoom(room), events, nil
+}
+
+func (s *Service) StartMissionVote(roomID string) (*Room, []Event, error) {
+	s.store.mu.Lock()
+	defer s.store.mu.Unlock()
+
+	room, ok := s.store.rooms[roomID]
+	if !ok {
+		return nil, nil, errors.New("房间不存在")
+	}
+	if room.CurrentPhase != PhaseMission || room.MissionSubPhase != "discuss" {
+		return nil, nil, errors.New("当前不是任务讨论阶段")
+	}
+	room.MissionSubPhase = "vote"
+	voteTimeLimit := missionVoteTimeLimit(room)
+	room.PhaseDeadline = phaseDeadline(voteTimeLimit, 0)
+	event := Event{
+		Name:   "missionSubPhase",
+		RoomID: roomID,
+		Payload: map[string]any{
+			"subPhase":   "vote",
+			"timeLimit":  voteTimeLimit,
+			"deadlineAt": room.PhaseDeadline,
+		},
+	}
+	return cloneRoom(room), []Event{event}, nil
+}
+
+// SetDebugMissionResult fixes the outcome of the next resolved mission in a
+// solo room. It is intentionally unavailable in player-facing modes.
+func (s *Service) SetDebugMissionResult(roomID, playerID string, success bool) (*Room, error) {
+	s.store.mu.Lock()
+	defer s.store.mu.Unlock()
+
+	room, ok := s.store.rooms[roomID]
+	if !ok {
+		return nil, errors.New("房间不存在")
+	}
+	if room.Mode != ModeSolo || !playerInRoom(room, playerID) || isAIPlayer(room, playerID) {
+		return nil, errors.New("只有单人调试房间的真人玩家可以设置任务结果")
+	}
+	room.DebugMissionResult = &success
+	return cloneRoom(room), nil
 }
 
 func (s *Service) StartTeamVote(roomID string) (*Room, []Event, error) {
@@ -351,6 +555,9 @@ func (s *Service) StartTeamVote(roomID string) (*Room, []Event, error) {
 	}
 	room.CurrentPhase = PhaseTeamVote
 	room.TeamVotes = map[string]bool{}
+	room.AutoTeamVotes = map[string]bool{}
+	voteTimeLimit := phaseTimeLimit(room, PhaseTeamVote)
+	room.PhaseDeadline = phaseDeadline(voteTimeLimit, 0)
 	event := Event{
 		Name:   "phaseChange",
 		RoomID: roomID,
@@ -361,7 +568,8 @@ func (s *Service) StartTeamVote(roomID string) (*Room, []Event, error) {
 			"proposedTeam":      room.ProposedTeam,
 			"proposedTeamNames": playerNames(room, room.ProposedTeam),
 			"missionResults":    room.MissionResults,
-			"timeLimit":         20,
+			"timeLimit":         voteTimeLimit,
+			"deadlineAt":        room.PhaseDeadline,
 		},
 	}
 	return cloneRoom(room), []Event{event}, nil
@@ -380,14 +588,14 @@ func (s *Service) MissionVote(roomID, voterID, action string) (*Room, []Event, e
 	if !ok {
 		return nil, nil, errors.New("房间不存在")
 	}
-	if room.CurrentPhase != PhaseMission {
+	if room.CurrentPhase != PhaseMission || room.MissionSubPhase != "vote" {
 		return nil, nil, errors.New("当前不是任务阶段")
 	}
 	if !contains(room.ProposedTeam, voterID) {
 		return nil, nil, errors.New("只有小队成员可以执行任务")
 	}
 	room.MissionVotes[voterID] = normalizeMissionAction(room, voterID, action)
-	if room.Mode == ModeTest || room.Mode == ModeSolo {
+	if hasAIPlayers(room) {
 		for _, playerID := range room.ProposedTeam {
 			if isAIPlayer(room, playerID) {
 				room.MissionVotes[playerID] = aiMissionAction(room, playerID)
@@ -396,6 +604,15 @@ func (s *Service) MissionVote(roomID, voterID, action string) (*Room, []Event, e
 	}
 	if len(room.MissionVotes) < len(room.ProposedTeam) {
 		return cloneRoom(room), nil, nil
+	}
+	if room.DebugMissionResult != nil && room.Mode == ModeSolo {
+		for _, playerID := range room.ProposedTeam {
+			room.MissionVotes[playerID] = MissionActionSupport
+		}
+		if !*room.DebugMissionResult && len(room.ProposedTeam) > 0 {
+			room.MissionVotes[room.ProposedTeam[0]] = MissionActionSabotage
+		}
+		room.DebugMissionResult = nil
 	}
 
 	success := true
@@ -417,24 +634,29 @@ func (s *Service) MissionVote(roomID, voterID, action string) (*Room, []Event, e
 	teamNames := playerNames(room, room.ProposedTeam)
 	focusPrompts := missionFocusPrompts(room, success, sabotageCount)
 	suspicionEvents := missionSuspicionEvents(room, success, sabotageCount)
+	room.DiscussionFocus = append([]string(nil), focusPrompts...)
+	room.SuspicionEvents = append(room.SuspicionEvents, suspicionEvents...)
 
 	events := []Event{{
 		Name:   "missionReveal",
 		RoomID: roomID,
 		Payload: map[string]any{
-			"roundNumber":      room.CurrentRound,
-			"explanation":      scenario.Explanation,
-			"team":             room.ProposedTeam,
-			"teamNames":        teamNames,
-			"success":          success,
-			"riskActionCount":  sabotageCount,
-			"sabotageCount":    sabotageCount,
-			"focusPrompts":     focusPrompts,
-			"suspicionEvents":  suspicionEvents,
-			"missionResults":   room.MissionResults,
-			"missionSuccesses": room.MissionSuccesses,
-			"missionFailures":  room.MissionFailures,
-			"hadPossession":    room.PossessedPlayer != "",
+			"roundNumber":       room.CurrentRound,
+			"explanation":       scenario.Explanation,
+			"team":              room.ProposedTeam,
+			"teamNames":         teamNames,
+			"success":           success,
+			"riskActionCount":   sabotageCount,
+			"sabotageCount":     sabotageCount,
+			"focusPrompts":      focusPrompts,
+			"suspicionEvents":   suspicionEvents,
+			"missionResults":    room.MissionResults,
+			"missionSuccesses":  room.MissionSuccesses,
+			"missionFailures":   room.MissionFailures,
+			"voteHistory":       publicVoteHistory(room.VoteHistory),
+			"nominationHistory": room.NominationHistory,
+			"stances":           room.Stances,
+			"hadPossession":     room.PossessedPlayer != "",
 		},
 	}, {
 		Name:   "missionResult",
@@ -458,6 +680,7 @@ func (s *Service) MissionVote(roomID, voterID, action string) (*Room, []Event, e
 
 	if room.MissionSuccesses >= MissionsToWin || room.MissionFailures >= MissionsToWin || room.CurrentRound >= MaxRounds {
 		room.Status = StatusFinished
+		room.EndedAtMillis = time.Now().UnixMilli()
 		winner := "engineer"
 		if room.MissionFailures >= MissionsToWin || room.MissionSuccesses < MissionsToWin {
 			winner = "infiltrator"
@@ -468,11 +691,13 @@ func (s *Service) MissionVote(roomID, voterID, action string) (*Room, []Event, e
 
 	room.CurrentRound++
 	room.CurrentPhase = PhasePropose
+	room.MissionSubPhase = ""
 	room.TeamVotes = map[string]bool{}
 	room.MissionVotes = map[string]string{}
+	room.AutoTeamVotes = map[string]bool{}
+	room.AutoMissionVotes = map[string]bool{}
 	room.ProposedTeam = []string{}
 	room.MessageCount = map[string]int{}
-	room.ChatMessages = []ChatMessage{}
 	humanIDs := humanIDs(room)
 	room.PossessedPlayer, room.PossessionStyle = choosePossession(humanIDs)
 	room.SignalHistory = append(room.SignalHistory, SignalRecord{
@@ -520,11 +745,18 @@ func roleEligiblePlayerIDs(room *Room) []string {
 		if player.Eliminated {
 			continue
 		}
-		if room.Mode == ModeTest || room.Mode == ModeSolo || !player.IsAI {
-			ids = append(ids, player.ID)
-		}
+		ids = append(ids, player.ID)
 	}
 	return ids
+}
+
+func hasAIPlayers(room *Room) bool {
+	for _, player := range room.Players {
+		if player.IsAI && !player.Eliminated {
+			return true
+		}
+	}
+	return false
 }
 
 func assignRoomRoles(room *Room, playerIDs []string) map[string]Role {
@@ -574,7 +806,7 @@ func roomHostCanStart(room *Room, playerID string) bool {
 		return true
 	}
 	for _, player := range room.Players {
-		if player.Eliminated || player.IsAI {
+		if player.Eliminated || player.IsAI || player.Disconnected {
 			continue
 		}
 		return player.ID == playerID
@@ -601,6 +833,9 @@ func isAIPlayer(room *Room, playerID string) bool {
 }
 
 func aiTeamVote(room *Room, playerID string) bool {
+	if room.Mode == ModeTest || room.Mode == ModeSolo {
+		return true
+	}
 	role := room.Roles[playerID]
 	if roleFaction(role) == "evil" {
 		return proposedTeamHasFaction(room, "evil") || room.CurrentRound == 1
@@ -637,12 +872,16 @@ func gameFinishedEvent(roomID string, room *Room, winner string) Event {
 		Name:   "gameFinished",
 		RoomID: roomID,
 		Payload: map[string]any{
-			"winner":           winner,
-			"winnerLabel":      winnerLabel(winner),
-			"roles":            buildRoleReveal(room, winner),
-			"missionResults":   room.MissionResults,
-			"missionSuccesses": room.MissionSuccesses,
-			"missionFailures":  room.MissionFailures,
+			"winner":            winner,
+			"winnerLabel":       winnerLabel(winner),
+			"roles":             buildRoleReveal(room, winner),
+			"missionResults":    room.MissionResults,
+			"missionSuccesses":  room.MissionSuccesses,
+			"missionFailures":   room.MissionFailures,
+			"voteHistory":       room.VoteHistory,
+			"signalHistory":     room.SignalHistory,
+			"nominationHistory": room.NominationHistory,
+			"stances":           room.Stances,
 		},
 	}
 }
@@ -778,13 +1017,188 @@ func publicPlayers(players []Player) []map[string]any {
 	output := make([]map[string]any, 0, len(players))
 	for _, player := range players {
 		output = append(output, map[string]any{
-			"id":       player.ID,
-			"name":     player.Name,
-			"position": player.Position,
-			"isAI":     player.IsAI,
+			"id":           player.ID,
+			"name":         player.Name,
+			"position":     player.Position,
+			"isAI":         player.IsAI,
+			"disconnected": player.Disconnected,
 		})
 	}
 	return output
+}
+
+func (s *Service) ReconnectEvents(roomID, playerID string) ([]Event, error) {
+	s.store.mu.Lock()
+	defer s.store.mu.Unlock()
+
+	room, ok := s.store.rooms[roomID]
+	if !ok {
+		return nil, errors.New("房间不存在")
+	}
+	role, ok := room.Roles[playerID]
+	if !ok {
+		return nil, errors.New("玩家身份不存在")
+	}
+	events := []Event{{
+		Name:     "rolesRevealed",
+		RoomID:   roomID,
+		SocketID: playerID,
+		Payload: map[string]any{
+			"role":            role,
+			"roleLabel":       RoleLabels[role],
+			"roleDescription": RoleDescription(role),
+			"players":         publicPlayers(room.Players),
+			"reconnected":     true,
+		},
+	}}
+
+	switch room.Status {
+	case StatusFinished:
+		event := gameFinishedEvent(roomID, room, winningFaction(room))
+		event.SocketID = playerID
+		return append(events, event), nil
+	case StatusPlaying:
+		phaseEvents := reconnectPhaseEvents(roomID, playerID, room)
+		for i := range phaseEvents {
+			phaseEvents[i].SocketID = playerID
+		}
+		events = append(events, phaseEvents...)
+		if stances := room.Stances[room.CurrentRound]; len(stances) > 0 {
+			events = append(events, Event{
+				Name:     "stanceUpdated",
+				RoomID:   roomID,
+				SocketID: playerID,
+				Payload: map[string]any{
+					"roundNumber": room.CurrentRound,
+					"stances":     stances,
+				},
+			})
+		}
+		if len(room.ChatMessages) > 0 {
+			events = append(events, Event{
+				Name:     "chatHistory",
+				RoomID:   roomID,
+				SocketID: playerID,
+				Payload: map[string]any{
+					"messages": publicChatMessages(room.ChatMessages),
+				},
+			})
+		}
+	}
+	return events, nil
+}
+
+func reconnectPhaseEvents(roomID, playerID string, room *Room) []Event {
+	switch room.CurrentPhase {
+	case PhasePropose:
+		return []Event{reconnectProposeEvent(roomID, room)}
+	case PhaseDiscuss:
+		return []Event{{
+			Name:   "phaseChange",
+			RoomID: roomID,
+			Payload: map[string]any{
+				"phase":             PhaseDiscuss,
+				"roundNumber":       room.CurrentRound,
+				"totalRounds":       MaxRounds,
+				"proposedTeam":      room.ProposedTeam,
+				"proposedTeamNames": playerNames(room, room.ProposedTeam),
+				"missionResults":    room.MissionResults,
+				"maxMessages":       MaxMessagesPerRound,
+				"maxChars":          MaxCharsPerMessage,
+				"leader":            leaderPayload(room),
+				"timeLimit":         phaseTimeLimit(room, PhaseDiscuss),
+				"deadlineAt":        room.PhaseDeadline,
+				"nominationReason":  room.NominationReason,
+			},
+		}}
+	case PhaseTeamVote:
+		return []Event{{
+			Name:   "phaseChange",
+			RoomID: roomID,
+			Payload: map[string]any{
+				"phase":             PhaseTeamVote,
+				"roundNumber":       room.CurrentRound,
+				"totalRounds":       MaxRounds,
+				"proposedTeam":      room.ProposedTeam,
+				"proposedTeamNames": playerNames(room, room.ProposedTeam),
+				"missionResults":    room.MissionResults,
+				"leader":            leaderPayload(room),
+				"nominationReason":  room.NominationReason,
+				"timeLimit":         phaseTimeLimit(room, PhaseTeamVote),
+				"deadlineAt":        room.PhaseDeadline,
+			},
+		}}
+	case PhaseMission:
+		return reconnectMissionEvents(roomID, playerID, room)
+	default:
+		return nil
+	}
+}
+
+func reconnectMissionEvents(roomID, playerID string, room *Room) []Event {
+	teamNames := playerNames(room, room.ProposedTeam)
+	scenario := MissionScenarioForRound(room.CurrentRound)
+	events := []Event{{
+		Name:   "phaseChange",
+		RoomID: roomID,
+		Payload: map[string]any{
+			"phase":             PhaseMission,
+			"roundNumber":       room.CurrentRound,
+			"totalRounds":       MaxRounds,
+			"proposedTeam":      room.ProposedTeam,
+			"proposedTeamNames": teamNames,
+			"missionResults":    room.MissionResults,
+			"timeLimit":         missionVoteTimeLimit(room),
+			"deadlineAt":        room.PhaseDeadline,
+		},
+	}}
+	if contains(room.ProposedTeam, playerID) {
+		events = append(events, Event{
+			Name:     "missionPuzzle",
+			RoomID:   roomID,
+			SocketID: playerID,
+			Payload: map[string]any{
+				"puzzle": map[string]any{
+					"id":       scenario.ID,
+					"title":    scenario.Title,
+					"scenario": scenario.Scenario,
+				},
+				"isPossessed": playerID == room.PossessedPlayer,
+				"canSabotage": roleFaction(room.Roles[playerID]) == "evil",
+				"teamNames":   teamNames,
+			},
+		})
+	} else {
+		events = append(events, Event{
+			Name:     "missionSpectate",
+			RoomID:   roomID,
+			SocketID: playerID,
+			Payload: map[string]any{
+				"teamNames":   teamNames,
+				"puzzleTitle": scenario.Title,
+			},
+		})
+	}
+	events = append(events, Event{
+		Name:     "missionSubPhase",
+		RoomID:   roomID,
+		SocketID: playerID,
+		Payload: map[string]any{
+			"subPhase":    room.MissionSubPhase,
+			"timeLimit":   missionVoteTimeLimit(room),
+			"deadlineAt":  room.PhaseDeadline,
+			"maxMessages": MaxMissionMessages,
+			"maxChars":    40,
+		},
+	})
+	return events
+}
+
+func winningFaction(room *Room) string {
+	if room.MissionFailures >= MissionsToWin || room.MissionSuccesses < MissionsToWin {
+		return "infiltrator"
+	}
+	return "engineer"
 }
 
 func choosePossession(playerIDs []string) (string, Style) {
@@ -834,6 +1248,8 @@ func playerNames(room *Room, playerIDs []string) []string {
 func missionStartEvents(roomID string, room *Room) []Event {
 	teamNames := playerNames(room, room.ProposedTeam)
 	scenario := MissionScenarioForRound(room.CurrentRound)
+	discussTimeLimit := missionDiscussTimeLimit(room)
+	room.PhaseDeadline = phaseDeadline(discussTimeLimit, 0)
 	events := []Event{{
 		Name:   "phaseChange",
 		RoomID: roomID,
@@ -845,7 +1261,8 @@ func missionStartEvents(roomID string, room *Room) []Event {
 			"proposedTeam":      room.ProposedTeam,
 			"proposedTeamNames": teamNames,
 			"missionResults":    room.MissionResults,
-			"timeLimit":         35,
+			"timeLimit":         discussTimeLimit,
+			"deadlineAt":        room.PhaseDeadline,
 		},
 	}}
 	for _, memberID := range room.ProposedTeam {
@@ -866,12 +1283,27 @@ func missionStartEvents(roomID string, room *Room) []Event {
 			},
 		})
 	}
+	for _, player := range room.Players {
+		if player.IsAI || player.Eliminated || player.Disconnected || contains(room.ProposedTeam, player.ID) {
+			continue
+		}
+		events = append(events, Event{
+			Name:     "missionSpectate",
+			RoomID:   roomID,
+			SocketID: player.ID,
+			Payload: map[string]any{
+				"teamNames":   teamNames,
+				"puzzleTitle": scenario.Title,
+			},
+		})
+	}
 	events = append(events, Event{
 		Name:   "missionSubPhase",
 		RoomID: roomID,
 		Payload: map[string]any{
 			"subPhase":    "discuss",
-			"timeLimit":   12,
+			"timeLimit":   discussTimeLimit,
+			"deadlineAt":  room.PhaseDeadline,
 			"maxMessages": 3,
 			"maxChars":    40,
 		},
@@ -880,7 +1312,16 @@ func missionStartEvents(roomID string, room *Room) []Event {
 }
 
 func phaseProposeEvent(roomID string, room *Room) Event {
-	humans := humanPlayers(room)
+	timeLimit := phaseTimeLimit(room, PhasePropose)
+	room.PhaseDeadline = phaseDeadline(timeLimit, 0)
+	return proposePhaseEvent(roomID, room, timeLimit)
+}
+
+func reconnectProposeEvent(roomID string, room *Room) Event {
+	return proposePhaseEvent(roomID, room, phaseTimeLimit(room, PhasePropose))
+}
+
+func proposePhaseEvent(roomID string, room *Room, timeLimit int) Event {
 	return Event{
 		Name:   "phaseChange",
 		RoomID: roomID,
@@ -889,11 +1330,51 @@ func phaseProposeEvent(roomID string, room *Room) Event {
 			"roundNumber":    room.CurrentRound,
 			"totalRounds":    MaxRounds,
 			"leader":         leaderPayload(room),
-			"teamSize":       MissionTeamSize(len(humans), room.CurrentRound),
+			"teamSize":       MissionTeamSize(len(alivePlayers(room)), room.CurrentRound),
 			"missionResults": room.MissionResults,
-			"timeLimit":      15,
+			"timeLimit":      timeLimit,
+			"deadlineAt":     room.PhaseDeadline,
 		},
 	}
+}
+
+func phaseTimeLimit(room *Room, phase Phase) int {
+	if room.Mode == ModeTest || room.Mode == ModeSolo {
+		switch phase {
+		case PhasePropose:
+			return 12
+		case PhaseDiscuss:
+			return 25
+		case PhaseTeamVote:
+			return 15
+		}
+	}
+	switch phase {
+	case PhaseDiscuss:
+		return 45
+	case PhaseTeamVote:
+		return 20
+	default:
+		return 15
+	}
+}
+
+func missionDiscussTimeLimit(room *Room) int {
+	if room.Mode == ModeTest || room.Mode == ModeSolo {
+		return 12
+	}
+	return 12
+}
+
+func missionVoteTimeLimit(room *Room) int {
+	if room.Mode == ModeTest || room.Mode == ModeSolo {
+		return 12
+	}
+	return 15
+}
+
+func phaseDeadline(timeLimit, graceSeconds int) int64 {
+	return time.Now().Add(time.Duration(timeLimit+graceSeconds) * time.Second).UnixMilli()
 }
 
 func rotateLeader(room *Room) {

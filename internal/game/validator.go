@@ -8,6 +8,7 @@ import (
 )
 
 var roomIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
+var playerTokenPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{16,80}$`)
 
 func ValidateRoomID(input string) (string, error) {
 	value := strings.TrimSpace(input)
@@ -37,6 +38,14 @@ func ValidatePlayerName(input string) (string, error) {
 	return value, nil
 }
 
+func ValidatePlayerToken(input string) (string, error) {
+	value := strings.TrimSpace(input)
+	if !playerTokenPattern.MatchString(value) {
+		return "", errors.New("玩家凭证无效")
+	}
+	return value, nil
+}
+
 func ValidateChatMessage(input string) (string, error) {
 	value := sanitizeText(strings.TrimSpace(input))
 	if value == "" {
@@ -44,6 +53,17 @@ func ValidateChatMessage(input string) (string, error) {
 	}
 	if utf8.RuneCountInString(value) > 100 {
 		return "", errors.New("消息长度必须在1-100之间")
+	}
+	return value, nil
+}
+
+func ValidateSocialReason(input string) (string, error) {
+	value := sanitizeText(strings.TrimSpace(input))
+	if value == "" {
+		return "", errors.New("请填写简短理由")
+	}
+	if utf8.RuneCountInString(value) > 60 {
+		return "", errors.New("理由不能超过60个字")
 	}
 	return value, nil
 }
