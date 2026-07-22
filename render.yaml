@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: who-is-ai-social-games
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/platform/games
+    autoDeployTrigger: commit
+    maxShutdownDelaySeconds: 30

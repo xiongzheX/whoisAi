@@ -1,0 +1,14 @@
+.git
+.gitignore
+.DS_Store
+.env
+*.log
+node_modules
+
+agentank-jjshell-v4.js
+official-site
+
+docs
+screenshots
+test
+runner_race/.DS_Store

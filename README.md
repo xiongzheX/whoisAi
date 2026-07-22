@@ -4,6 +4,8 @@
 
 平台提供统一游戏大厅、公开等待房间、邀请链接、断线恢复和原房复玩，内置三款可完整游玩的游戏。所有关键对局结果由 Go 服务端生成，房主浏览器不是权威状态源。
 
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/xiongzheX/whoisAi)
+
 ## 可玩游戏
 
 | 游戏 | 类型 | 人数 | 入口 | 一句话玩法 |
@@ -63,6 +65,30 @@ GOCACHE=/tmp/whoisai-gocache PORT=3014 go run ./cmd/go-server
 ```
 
 Node 依赖用于提供 Socket.IO 浏览器客户端；页面与实时游戏服务均由同一个 Go 进程托管。
+
+## 部署到 Render
+
+仓库包含 `Dockerfile` 和 `render.yaml`，可以作为 Render Blueprint 部署到新加坡免费 Web Service。
+
+1. 点击 README 顶部的 “Deploy to Render” 按钮并登录 Render。
+2. 授权 Render 访问 `xiongzheX/whoisAi` 仓库；私有仓库需要安装 Render GitHub App。
+3. 在 Blueprint 页面确认服务配置并点击部署。
+4. 等待镜像构建和 `/api/platform/games` 健康检查通过。
+5. 打开 Render 分配的 `https://...onrender.com` 地址。
+
+Blueprint 使用以下配置：
+
+| 配置 | 值 |
+| --- | --- |
+| Runtime | Docker |
+| Plan | Free |
+| Region | Singapore |
+| Health Check | `/api/platform/games` |
+| Auto Deploy | 每次推送默认分支后自动部署 |
+
+如需启用外部 AI 发言改写，在 Render 服务的 Environment 页面添加 `AI_API_KEY`、`AI_BASE_URL` 和 `AI_MODEL`，不要把密钥写入 Git。未配置时游戏会使用本地规则。
+
+Render 免费服务连续 15 分钟没有 HTTP 请求或 WebSocket 消息时会休眠。重新访问会自动唤醒，但内存中的等待房间和对局会被清空；正在交换 WebSocket 消息的活跃游戏不会因空闲规则休眠。详情见 [Render 免费服务说明](https://render.com/docs/free)。
 
 ## 两个人如何本地测试
 
