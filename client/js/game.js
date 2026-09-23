@@ -329,15 +329,16 @@ async function loadPlatformGameCatalog() {
       const active = game.status === 'active';
       const selected = active && game.id === selectedPlatformGameID;
       const playerRange = game.minPlayers === game.maxPlayers ? `${game.minPlayers} 人` : `${game.minPlayers}–${game.maxPlayers} 人`;
-      const status = active ? `${playerRange}房间` : game.status === 'coming_soon' ? '正在筹备' : '暂停开放';
-      const icons = { 'who-is-ai': '◌', 'bean-sprint': '≈', 'dumpling-sumo': '◯' };
+      const local = game.manifest?.playMode === 'local';
+      const status = active ? (local ? '单人 · 可选 2–9 人桌' : `${playerRange}房间`) : game.status === 'coming_soon' ? '正在筹备' : '暂停开放';
+      const icons = { 'who-is-ai': '◌', 'bean-sprint': '≈', 'dumpling-sumo': '◯', 'texas-holdem': '♠' };
       const tagText = Array.isArray(game.tags) ? game.tags.slice(0, 2).map(escapeHtml).join(' · ') : '';
       const body = `<span class="game-card-index">${icons[game.id] || String(index + 1).padStart(2, '0')}</span>
         <div class="game-card-copy">
           <small>${escapeHtml(tagText || status)}</small>
           <strong>${escapeHtml(game.name)}</strong>
           <p>${escapeHtml(game.description || '')}</p>
-          <span class="game-card-action">${active ? `${status} · 查看等待房 →` : status}</span>
+          <span class="game-card-action">${active ? `${status} · ${local ? '直接开玩' : '查看等待房'} →` : status}</span>
         </div>`;
       if (active) {
         return `<a class="platform-game-card is-active game-${escapeHtml(game.id)}${selected ? ' is-selected' : ''}" data-game-id="${escapeHtml(game.id)}" href="${escapeHtml(game.route || '#who-is-ai-room')}"${selected ? ' aria-current="true"' : ''}>${body}</a>`;
@@ -347,6 +348,7 @@ async function loadPlatformGameCatalog() {
     container.onclick = (event) => {
       const card = event.target.closest('.platform-game-card[data-game-id]');
       if (!card || !card.classList.contains('is-active')) return;
+      if (platformGames.find(game => game.id === card.dataset.gameId)?.manifest?.playMode === 'local') return;
       event.preventDefault();
       selectPlatformGame(card.dataset.gameId, true);
     };
@@ -394,7 +396,7 @@ function selectPlatformGame(gameID, focusRooms) {
   const duelNumber = document.getElementById('platformDuelNumber');
   if (!isWhoIsAI && duelName) duelName.textContent = game.name;
   if (!isWhoIsAI && duelDescription) duelDescription.textContent = game.description || '两人同步准备，轻松开一局。';
-  if (!isWhoIsAI && duelNumber) duelNumber.textContent = game.id === 'bean-sprint' ? '02' : '03';
+  if (!isWhoIsAI && duelNumber) duelNumber.textContent = game.id === 'bean-sprint' ? '02' : game.id === 'texas-holdem' ? '04' : '03';
   const createLink = document.getElementById('createPlatformRoom');
   if (createLink && !isWhoIsAI) {
     const createURL = new URL(game.route, window.location.origin);

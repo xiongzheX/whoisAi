@@ -6,7 +6,7 @@
     "start": "go run ./cmd/go-server",
     "go:server": "go run ./cmd/go-server",
     "go:test": "GOCACHE=/tmp/whoisai-gocache go test ./... && cd runner_race && GOCACHE=/tmp/whoisai-runner-gocache go test ./...",
-    "check": "node -c client/js/stage.js && node -c client/js/game.js && node -c client/js/duel-room.js && GOCACHE=/tmp/whoisai-gocache go test ./... -timeout 60s && cd runner_race && GOCACHE=/tmp/whoisai-runner-gocache go test ./... -timeout 60s",
+    "check": "node --test test/poker-engine.test.js test/poker-clock.test.js test/poker-multiplayer.test.js test/poker-bot.test.js && node -c client/games/texas-holdem/room.js && node -c client/games/texas-holdem/poker.js && node -c client/js/stage.js && node -c client/js/game.js && node -c client/js/duel-room.js && GOCACHE=/tmp/whoisai-gocache go test ./... -timeout 60s && cd runner_race && GOCACHE=/tmp/whoisai-runner-gocache go test ./... -timeout 60s",
     "test": "npm run check"
   },
   "dependencies": {

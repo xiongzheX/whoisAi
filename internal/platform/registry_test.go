@@ -6,7 +6,7 @@ func TestDefaultRegistryContainsCurrentGames(t *testing.T) {
 	t.Parallel()
 
 	games := DefaultRegistry().Games()
-	wantIDs := []string{"who-is-ai", "bean-sprint", "dumpling-sumo"}
+	wantIDs := []string{"who-is-ai", "bean-sprint", "dumpling-sumo", "texas-holdem"}
 	if len(games) != len(wantIDs) {
 		t.Fatalf("len(DefaultRegistry().Games()) = %d, want %d", len(games), len(wantIDs))
 	}

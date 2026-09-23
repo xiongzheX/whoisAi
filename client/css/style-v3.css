@@ -5402,3 +5402,23 @@ body:has(#loginScreen:not(.hidden)) .connection-status.connected {
     height: 38px;
   }
 }
+
+/* Four games share a compact, fully visible catalog. */
+#loginScreen .platform-game-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  overflow: visible;
+}
+#loginScreen .platform-game-card.game-texas-holdem {
+  border-color: rgba(76, 126, 98, 0.3);
+  background: linear-gradient(145deg, #dcebd8, #f5edcf);
+}
+#loginScreen .game-texas-holdem .game-card-index {
+  color: #487b60;
+  background: rgba(131, 178, 137, 0.25);
+}
+@media (max-width: 560px) {
+  #loginScreen .game-texas-holdem .game-card-copy > small {
+    display: block;
+    font-size: 0.58rem;
+  }
+}

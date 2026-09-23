@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f7f5ec"><title>摸鱼德州 · 好友小游园</title>
+  <link rel="stylesheet" href="/games/texas-holdem/poker.css">
+  <script defer src="/games/texas-holdem/engine.js"></script><script defer src="/games/texas-holdem/turn-clock.js"></script><script defer src="/games/texas-holdem/room.js"></script><script defer src="/games/texas-holdem/poker.js"></script>
+</head>
+<body>
+<header class="topbar"><a class="brand" href="/" aria-label="返回好友小游园大厅"><span class="brand-icon">✿</span> 好友小游园 <span class="brand-divider">/</span> <span class="brand-section">摸鱼俱乐部</span></a><div class="top-actions"><span class="local-badge"><i></i> <span id="pokerModeLabel">好友同桌 · 电脑补位</span></span><a href="/" class="back-link">← 返回大厅</a></div></header>
+<main>
+  <section class="intro"><div><div class="eyebrow">TAKE A SEAT. TAKE IT EASY.</div><h1>摸鱼德州<span class="title-flower">✳</span></h1><p>给脑袋放个小假，和可爱的牌友过两招。</p></div><button id="rulesButton" class="rules-button"><span>?</span> 新手小抄</button></section>
+  <section id="pokerRoom" class="poker-room" hidden aria-label="好友牌桌">
+    <div class="room-heading"><div><span class="eyebrow">FRIENDS AT THE TABLE</span><h2 id="roomTitle">叫上朋友，一起摸鱼。</h2></div><a href="?mode=solo">先玩单人练习 →</a></div>
+    <div id="roomEntry" class="room-entry"><label>你的昵称<input id="pokerName" maxlength="12" autocomplete="nickname" placeholder="输入 1–12 个字"></label><label>房间邀请码<input id="pokerCode" maxlength="24" placeholder="粘贴朋友的邀请码"></label><button id="joinPoker" type="button">加入好友</button><button id="createPoker" type="button">快速开房</button></div>
+    <div id="roomJoined" hidden><div class="room-invite"><span id="roomCodeText"></span><button id="copyPokerInvite" type="button">复制邀请链接</button><button id="leavePoker" type="button">离开房间</button><button id="pokerLobby" type="button" hidden>回到等待房</button></div><div id="pokerMembers" class="poker-members"></div><div class="room-start"><label for="roomTarget">牌桌总人数</label><select id="roomTarget"><option>2</option><option>3</option><option>4</option><option>5</option><option selected>6</option><option>7</option><option>8</option><option>9</option></select><button id="savePokerTarget" type="button">保存人数</button><span id="fillPreview"></span><button id="startPoker" type="button">开始游戏</button></div><p class="room-explainer">真人优先，电脑补足空位。局中锁定座位；断线可重新进入，超时自动过牌或弃牌。</p></div>
+    <p id="roomMessage" class="room-message" role="status" aria-live="polite"></p>
+  </section>
+  <div class="game-layout">
+    <section class="table-settings" aria-label="牌桌人数设置"><div><label for="playerCount">这桌坐几位？</label><p>含你在内 2–9 人，其余是电脑牌友；重新开桌会重置豆豆。</p></div><select id="playerCount" aria-label="牌桌人数"><option value="2">2 人 · 双人对决</option><option value="3">3 人 · 小聚</option><option value="4">4 人 · 轻松局</option><option value="5">5 人</option><option value="6">6 人 · 热闹桌</option><option value="7">7 人</option><option value="8">8 人</option><option value="9" selected>9 人 · 满员桌</option></select><button id="newTableButton" type="button">重新开桌</button></section>
+    <section class="play-area" aria-label="德州扑克牌桌">
+      <div class="table-toolbar"><div><span class="live-dot"></span> 林间小桌 <span class="table-tag" id="tableCapacity">9 人桌</span></div><span id="handLabel">第 01 局 <span>·</span> 盲注 10 / 20</span></div>
+      <div class="scene">
+        <div class="scene-doodle doodle-one" aria-hidden="true">✧</div><div class="scene-doodle doodle-two" aria-hidden="true">✳</div>
+        <div class="table-shadow"></div><div class="poker-table"><div class="felt-line"></div><div class="table-wordmark" aria-hidden="true">GOOD CARDS, GOOD TIMES</div></div>
+        <div id="seats"></div>
+        <div class="community"><div class="pot"><span class="chip-icon">✿</span><span>底池</span><strong id="potValue">30</strong></div><div id="board" class="cards board" aria-label="公共牌"></div><div id="streetLabel" class="street-label">翻牌前 · 好戏才刚开始</div></div>
+
+        <span class="table-note">一桌小快乐，不必太认真。</span>
+      </div>
+      <div class="action-panel"><div class="turn-copy"><span id="turnIcon">☀</span><div><strong id="turnTitle">轮到你啦</strong><p id="turnHint">看看手牌，慢慢决定。</p></div><span id="handStrength" class="hand-strength"></span></div>
+        <div id="turnClock" class="turn-clock" hidden><div class="clock-caption"><span id="clockLabel">你的操作时间</span><strong id="clockSeconds">20s</strong></div><div class="clock-track"><div id="clockFill"></div></div></div>
+        <div id="betControls" class="bet-controls"><label for="raiseRange">加注至 <output id="raiseValue">40</output></label><input id="raiseRange" type="range" min="40" max="1000" step="1" value="40"><div class="quick-bets"><button data-bet="min">最小</button><button data-bet="half">½ 底池</button><button data-bet="pot">底池</button><button data-bet="all">全下</button></div></div>
+        <div class="action-buttons" id="actions"><button id="foldButton" class="action fold">弃牌<span>下次再出手</span></button><button id="callButton" class="action call">跟注<span>再看一眼</span></button><button id="raiseButton" class="action raise">加注<span>加一点勇气 ↗</span></button></div>
+        <button id="nextButton" class="next-button" hidden>再来一局 →</button>
+        <p class="play-note">只用虚拟豆豆，开心就是最大的底池。</p>
+      </div>
+    </section>
+    <aside class="sidebar"><section class="welcome-card"><span class="mini-label">TODAY'S GOOD MOOD</span><h2>牌可以慢慢打，<br>快乐现在就要。</h2><div class="mug-illustration" aria-hidden="true"><span class="steam">∿ ∿</span><div class="mug">◡</div><div class="mug-saucer"></div><span class="mug-sparkle">✦</span></div><p>一杯茶的时间，刚好摸一局鱼。</p></section>
+      <section class="info-card"><div class="section-heading"><h2>桌边小记</h2><span>LIVE</span></div><ol id="gameLog" class="game-log" aria-live="polite" aria-relevant="additions"></ol></section>
+      <section class="tip-card"><span>☝</span><div><h3>今天也学会一点点</h3><p id="tipText">用你的 2 张手牌和 5 张公共牌，组合出最好的 5 张牌。</p><button id="moreTips">换个小贴士 ↻</button></div></section>
+    </aside>
+  </div>
+  <footer><span>✿ 好友小游园 <span class="footer-dot">·</span> 快乐，没有门槛。</span><span><span id="pokerPersistence">好友房间 · 刷新可恢复，服务重启会清空</span></span></footer>
+</main>
+<dialog id="rulesDialog"><form method="dialog"><button class="close-dialog" aria-label="关闭玩法说明">×</button></form><div class="eyebrow">A LITTLE CHEAT SHEET</div><h2>三分钟，学会摸鱼。</h2><p>房主创建房间并分享邀请，真人加入后，开局时用电脑补齐所选的 2–9 人（含真人）；每位初始 1,000 颗虚拟豆豆，小盲 10、大盲 20，每局轮换庄家。</p><ol><li><strong>拿 2 张手牌。</strong>只有你能看到自己的牌。</li><li><strong>看 5 张公共牌。</strong>翻牌 3 张、转牌 1 张、河牌 1 张；每个阶段都能下注。</li><li><strong>选最强的 5 张。</strong>从 7 张牌里任选五张比大小；相同牌型比较点数，完全相同平分底池。</li></ol><div class="rank-list">同花顺 › 四条 › 葫芦 › 同花 › 顺子<br>› 三条 › 两对 › 一对 › 高牌</div><p><strong>过牌</strong>：无需补豆时让下一位行动。<strong>跟注</strong>：补齐当前下注。<strong>加注至</strong>：你在本轮的总下注额。<strong>弃牌</strong>：退出这一局，已下的豆豆留在底池。</p><p><strong>每次操作限时 20 秒。</strong>超时且无需跟注时自动过牌，否则自动弃牌。打开小抄或切到后台仍会计时。</p><p>全下只参与自己覆盖的底池，其余下注进入边池。豆豆用完可以重新开桌。电脑牌友结合自己的手牌、公共牌、位置和近期公开操作作决定，不偷看其他手牌。桃桃爱看翻牌，小橘大胆出击，绵绵偏爱跟注；悬停头像所在座位可查看风格。</p><button id="gotIt" class="next-button">懂啦，回牌桌 →</button></dialog>
+<div id="announcement" class="sr-only" role="status" aria-live="polite"></div>
+</body></html>

@@ -68,6 +68,20 @@ func DefaultRegistry() *Registry {
 			Tags:        []string{"双人", "配点", "对抗"},
 			SortOrder:   30,
 		},
+		{
+			ID:          "texas-holdem",
+			Slug:        "texas-holdem",
+			Name:        "摸鱼德州",
+			Description: "好友同桌玩德州扑克，真人优先，电脑补齐至 2–9 人。",
+			Status:      GameActive,
+			MinPlayers:  1,
+			MaxPlayers:  9,
+			SupportsAI:  true,
+			Route:       "/games/texas-holdem/",
+			Tags:        []string{"好友同桌", "电脑补位", "德州扑克"},
+			Manifest:    []byte(`{"playMode":"multiplayer"}`),
+			SortOrder:   40,
+		},
 	})
 	if err != nil {
 		panic(err)

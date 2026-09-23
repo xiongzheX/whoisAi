@@ -1,0 +1,44 @@
+'use strict';
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const TurnClock = require('../client/games/texas-holdem/turn-clock.js');
+const { Table } = require('../client/games/texas-holdem/engine.js');
+test('turn deadline survives background delays and can only expire once', () => {
+  let now = 1000;
+  const clock = new TurnClock(() => now);
+  clock.start();
+  now += 15000;
+  assert.equal(clock.remaining(), 5000);
+  assert.equal(clock.consumeExpiry(), false);
+  now += 90000;
+  assert.equal(clock.remaining(), 0);
+  assert.equal(clock.consumeExpiry(), true);
+  assert.equal(clock.consumeExpiry(), false);
+  clock.start();
+  assert.equal(clock.remaining(), 20000);
+  clock.stop();
+  now += 30000;
+  assert.equal(clock.expired(), false);
+});
+test('timeout folds when facing a bet and checks for free', () => {
+  const table = new Table(); table.start();
+  const seat = table.actor;
+  table.act(table.options().call ? 'fold' : 'call');
+  assert.equal(table.players[seat].folded, true);
+  assert.equal(table.lastAction.text, '弃牌');
+  while (table.phase === 'preflop') table.act('call');
+  assert.equal(table.options().call, 0);
+  table.act(table.options().call ? 'fold' : 'call');
+  assert.equal(table.lastAction.text, '过牌');
+});
+test('action event retains actor and amount across street advancement', () => {
+  const table = new Table(); table.start();
+  for (let i = 0; i < 3; i++) table.act('call');
+  const actor = table.actor;
+  table.act('call');
+  assert.equal(table.phase, 'flop');
+  assert.deepEqual(table.lastAction, { seat: actor, kind: 'call', text: '过牌', paid: 0, chips: 980, pot: 80 });
+  table.act('raise', 50);
+  assert.equal(table.lastAction.paid, 50);
+  assert.equal(table.lastAction.text, '加注至 50');
+});

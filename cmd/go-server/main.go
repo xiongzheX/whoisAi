@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"whoisai/internal/envfile"
 	"whoisai/internal/game"
 	"whoisai/internal/platform"
+	"whoisai/internal/poker"
 	"whoisai/internal/realtime"
 )
 
@@ -42,7 +44,13 @@ func main() {
 	realtimeServer.Register()
 	platformAPI := platform.NewHTTPAPI(registry, platformStore)
 
+	pokerService := poker.NewService(platformStore)
+	pokerContext, stopPoker := context.WithCancel(context.Background())
+	pokerDone := make(chan struct{})
+	go func() { defer close(pokerDone); pokerService.Run(pokerContext) }()
+	defer func() { stopPoker(); <-pokerDone }()
 	mux := http.NewServeMux()
+	mux.Handle("/api/poker/", pokerService)
 	mux.HandleFunc("/favicon.ico", serveNoContent)
 	mux.HandleFunc("/socket.io/socket.io.js", serveSocketIOClient)
 	mux.HandleFunc("/socket.io/socket.io.js.map", serveSocketIOClient)
