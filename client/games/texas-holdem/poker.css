@@ -233,3 +233,12 @@
 .poker-room.is-playing #savePokerTarget { display: none; }
 .poker-room.is-playing .room-start { margin-top: 10px; }
 .poker-room.is-playing .room-message { margin-bottom: 0; }
+.poker-history { margin-top: 18px; border-top: 1px solid var(--line, #dde2d6); padding-top: 14px; }
+.poker-history summary { cursor: pointer; color: #36533f; font-weight: 700; }
+.poker-history summary span { font-size: 12px; font-weight: 400; margin-left: 8px; color: #6e7969; }
+.poker-history p { font-size: 12px; line-height: 1.7; color: #6e7969; }
+.poker-history ol { list-style: none; padding: 0; max-height: 300px; overflow-y: auto; }
+.poker-history li { display: grid; gap: 5px; padding: 12px 0; border-bottom: 1px dashed #dde2d6; }
+.poker-history li strong { font-size: 14px; color: #36533f; }
+.poker-history li span { font-size: 12px; line-height: 1.6; color: #6e7969; overflow-wrap: anywhere; }
+@media(max-width:560px) { .poker-history summary span { display: block; margin: 6px 0 0; } }

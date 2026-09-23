@@ -2,12 +2,14 @@ package poker
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"sync"
@@ -25,18 +27,29 @@ type room struct {
 	deadline, moveAfter, botAt time.Time
 	seen                       map[string]time.Time
 	updated                    time.Time
+	profiles                   map[string]string
+	startChips                 []int
+	recordID                   string
+	pending                    *HandRecord
+	retryAt                    time.Time
 }
 
 // Service serializes room mutations and ticks; snapshots are built under the same lock.
 type Service struct {
-	mu    sync.Mutex
-	store *platform.MemoryStore
-	rooms map[string]*room
-	now   func() time.Time
+	mu      sync.Mutex
+	store   *platform.MemoryStore
+	rooms   map[string]*room
+	now     func() time.Time
+	records Records
 }
 
 func NewService(store *platform.MemoryStore) *Service {
-	return &Service{store: store, rooms: map[string]*room{}, now: time.Now}
+	return NewServiceWithRecords(store, NewMemoryRecords())
+}
+
+// NewServiceWithRecords enables completed-hand history with the supplied store.
+func NewServiceWithRecords(store *platform.MemoryStore, records Records) *Service {
+	return &Service{store: store, rooms: map[string]*room{}, now: time.Now, records: records}
 }
 
 // Run stops when ctx is cancelled. The caller owns and waits for its goroutine.
@@ -91,8 +104,7 @@ func (s *Service) afterAction(code string, r *room, now time.Time, timedOut bool
 	}
 	s.setTurn(r, now, true)
 	if r.table.Phase == "done" {
-		summary, _ := json.Marshal(map[string]any{"result": r.table.Result, "payouts": r.table.Payouts})
-		_, _ = s.store.FinishSession(code, summary)
+		s.finishHand(code, r, now)
 	}
 }
 func (s *Service) tick(now time.Time) {
@@ -102,6 +114,12 @@ func (s *Service) tick(now time.Time) {
 		party, ok := s.store.RoomByCode(code)
 		if !ok {
 			delete(s.rooms, code)
+			continue
+		}
+		if r.pending != nil {
+			if !now.Before(r.retryAt) {
+				s.savePending(code, r, now)
+			}
 			continue
 		}
 		for _, m := range party.Members {
@@ -160,13 +178,28 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		writeJSON(w, 405, map[string]string{"error": "不支持的方法"})
 		return
 	}
-	token := strings.TrimPrefix(req.Header.Get("Authorization"), "Bearer ")
-	if len(token) < 24 || len(token) > 100 {
+	token, bearer := strings.CutPrefix(req.Header.Get("Authorization"), "Bearer ")
+	if !bearer || len(token) < 24 || len(token) > 100 {
 		writeJSON(w, 401, map[string]string{"error": "缺少玩家身份，请重新加入"})
 		return
 	}
 	input := request{}
 	operation := strings.TrimPrefix(req.URL.Path, "/api/poker/")
+	if operation == "history" {
+		if req.Method != "GET" {
+			writeJSON(w, 405, map[string]string{"error": "请使用 GET"})
+			return
+		}
+		ctx, cancel := context.WithTimeout(req.Context(), 5*time.Second)
+		defer cancel()
+		history, err := s.records.History(ctx, profileID(token))
+		if err != nil {
+			writeJSON(w, 503, map[string]string{"error": ErrRecordsUnavailable.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"persistent": s.records.Durable(), "history": history})
+		return
+	}
 	if req.Method == "POST" {
 		req.Body = http.MaxBytesReader(w, req.Body, 4096)
 		dec := json.NewDecoder(req.Body)
@@ -193,9 +226,14 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := s.now()
-	code, id, err := s.handle(operation, input, token, now)
+	ctx, cancel := context.WithTimeout(req.Context(), 5*time.Second)
+	defer cancel()
+	code, id, err := s.handleContext(ctx, operation, input, token, now)
 	if err != nil {
 		status := 400
+		if errors.Is(err, ErrRecordsUnavailable) {
+			status = 503
+		}
 		if errors.Is(err, platform.ErrRoomNotFound) {
 			status = 404
 		}
@@ -212,6 +250,9 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	writeJSON(w, 200, s.snapshot(code, id, now))
 }
 func (s *Service) handle(op string, in request, token string, now time.Time) (string, string, error) {
+	return s.handleContext(context.Background(), op, in, token, now)
+}
+func (s *Service) handleContext(ctx context.Context, op string, in request, token string, now time.Time) (string, string, error) {
 	code := strings.TrimSpace(in.Code)
 	id := memberID(code, token)
 	if op == "create" {
@@ -222,13 +263,16 @@ func (s *Service) handle(op string, in request, token string, now time.Time) (st
 		if in.Target < 2 || in.Target > 9 {
 			return "", "", errors.New("总人数必须为 2–9 人")
 		}
+		if err := s.records.Player(ctx, profileID(token), name); err != nil {
+			return "", "", err
+		}
 		code = platform.GenerateRoomCode("texas-holdem")
 		id = memberID(code, token)
 		_, err := s.store.CreateRoom(platform.CreateRoomInput{Code: code, HostID: id, HostName: name, GameID: "texas-holdem"})
 		if err != nil {
 			return "", "", err
 		}
-		s.rooms[code] = &room{target: in.Target, version: 1, seen: map[string]time.Time{id: now}, updated: now}
+		s.rooms[code] = &room{target: in.Target, version: 1, seen: map[string]time.Time{id: now}, updated: now, profiles: map[string]string{id: profileID(token)}}
 		return code, id, nil
 	}
 	r, ok := s.rooms[code]
@@ -247,9 +291,13 @@ func (s *Service) handle(op string, in request, token string, now time.Time) (st
 		if !isMember(party, id) && (r.table != nil || len(party.Members) >= r.target) {
 			return "", "", errors.New("本桌已开局或真人席位已满，请等待房主回到等待房")
 		}
+		if err := s.records.Player(ctx, profileID(token), name); err != nil {
+			return "", "", err
+		}
 		if _, _, err := s.store.JoinRoom(code, id, name); err != nil {
 			return "", "", err
 		}
+		r.profiles[id] = profileID(token)
 		r.seen[id] = now
 		r.version++
 		return code, id, nil
@@ -259,6 +307,9 @@ func (s *Service) handle(op string, in request, token string, now time.Time) (st
 	}
 	r.seen[id] = now
 	_, _ = s.store.SetConnection(code, id, platform.MemberOnline)
+	if r.pending != nil && (op == "next" || op == "lobby" || op == "leave" || op == "start") {
+		return "", "", errors.New("本局战绩正在保存，请稍后重试")
+	}
 	switch op {
 	case "state":
 	case "configure":
@@ -378,6 +429,11 @@ func (s *Service) startHand(code string, r *room, party *platform.PartyRoom, now
 	if err != nil {
 		return err
 	}
+	r.startChips = make([]int, len(r.table.Players))
+	for i, p := range r.table.Players {
+		r.startChips[i] = p.Chips
+	}
+	r.recordID = rand.Text()
 	if err := r.table.start(); err != nil {
 		_, _ = s.store.AbandonSession(code)
 		return err
@@ -386,8 +442,7 @@ func (s *Service) startHand(code string, r *room, party *platform.PartyRoom, now
 	r.version++
 	s.setTurn(r, now, false)
 	if r.table.Phase == "done" {
-		summary, _ := json.Marshal(map[string]any{"result": r.table.Result, "payouts": r.table.Payouts})
-		_, _ = s.store.FinishSession(code, summary)
+		s.finishHand(code, r, now)
 	}
 	return nil
 }
@@ -395,6 +450,8 @@ func (s *Service) snapshot(code, id string, now time.Time) map[string]any {
 	r := s.rooms[code]
 	party, _ := s.store.RoomByCode(code)
 	state := map[string]any{"code": code, "playerId": id, "hostId": party.HostMemberID, "members": party.Members, "target": r.target, "version": r.version, "sessionId": r.sessionID, "serverTime": now.UnixMilli(), "deadline": int64(0), "moveAfter": r.moveAfter.UnixMilli(), "table": nil}
+	state["persistent"] = s.records.Durable()
+	state["settlementPending"] = r.pending != nil
 	if r.table == nil {
 		return state
 	}
@@ -424,4 +481,38 @@ func (s *Service) snapshot(code, id string, now time.Time) map[string]any {
 	}
 	state["table"] = map[string]any{"players": players, "dealer": t.Dealer, "actor": t.Actor, "hand": t.Hand, "phase": t.Phase, "board": t.Board, "pot": t.Pot, "lastPot": t.LastPot, "payouts": t.Payouts, "revealed": t.Revealed, "result": t.Result, "log": t.Log, "currentBet": t.CurrentBet, "lastAction": t.LastAction, "options": options}
 	return state
+}
+
+// finishHand captures an immutable settlement before another hand can overwrite it.
+func (s *Service) finishHand(code string, r *room, now time.Time) {
+	h := HandRecord{ID: r.recordID, RoomCode: code, Hand: r.table.Hand, EndedAt: now, Result: r.table.Result}
+	for i, p := range r.table.Players {
+		if r.startChips[i] <= 0 {
+			continue
+		}
+		payout := 0
+		if i < len(r.table.Payouts) {
+			payout = r.table.Payouts[i]
+		}
+		h.Players = append(h.Players, HandPlayer{Seat: i, ProfileID: r.profiles[p.ID], Name: p.Name, Bot: p.Bot, StartChips: r.startChips[i], EndChips: p.Chips, Payout: payout})
+	}
+	r.pending = &h
+	s.savePending(code, r, now)
+}
+func (s *Service) savePending(code string, r *room, now time.Time) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := s.records.SaveHand(ctx, *r.pending); err != nil {
+		// Do not print driver errors or connection details.
+		if r.retryAt.IsZero() {
+			log.Printf("poker settlement pending: database save failed")
+		}
+		r.retryAt = now.Add(5 * time.Second)
+		return
+	}
+	summary, _ := json.Marshal(map[string]any{"result": r.table.Result, "payouts": r.table.Payouts})
+	_, _ = s.store.FinishSession(code, summary)
+	r.pending = nil
+	r.retryAt = time.Time{}
+	r.version++
 }

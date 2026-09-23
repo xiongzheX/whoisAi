@@ -104,7 +104,7 @@
     $('actions').hidden = done;
     $('betControls').hidden = done;
     $('nextButton').hidden = !done;
-    $('nextButton').disabled = multiplayer && !roomClient?.isHost();
+    $('nextButton').disabled = multiplayer && (!roomClient?.isHost() || remoteState?.settlementPending);
     $('nextButton').textContent = table.players[0].chips === 0 || table.players.filter(p => p.chips > 0).length < 2 ? '带上新豆豆，重新开桌 →' : '再来一局 →';
     if (multiplayer) { $('nextButton').textContent = roomClient?.isHost() ? (table.players.filter(p => p.chips > 0).length < 2 ? '本桌结束，请回到等待房' : '下一局 →') : '等待房主开始下一局'; if (table.players.filter(p => p.chips > 0).length < 2) $('nextButton').disabled = true; }
     $('foldButton').disabled = !myTurn;

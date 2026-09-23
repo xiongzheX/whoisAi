@@ -7,3 +7,6 @@ services:
     dockerfilePath: ./Dockerfile
     healthCheckPath: /api/platform/games
     autoDeployTrigger: commit
+    envVars:
+      - key: DATABASE_URL
+        sync: false

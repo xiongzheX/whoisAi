@@ -6,7 +6,7 @@ WORKDIR /src
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
-FROM golang:1.24-alpine AS builder
+FROM golang:1.26.7-alpine AS builder
 
 WORKDIR /src
 COPY go.mod go.sum ./

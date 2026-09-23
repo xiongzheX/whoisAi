@@ -7,7 +7,9 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
+	"time"
 
 	siosocket "github.com/zishang520/socket.io/socket"
 
@@ -44,7 +46,21 @@ func main() {
 	realtimeServer.Register()
 	platformAPI := platform.NewHTTPAPI(registry, platformStore)
 
-	pokerService := poker.NewService(platformStore)
+	var pokerRecords poker.Records = poker.NewMemoryRecords()
+	if databaseURL := strings.TrimSpace(os.Getenv("DATABASE_URL")); databaseURL != "" {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		db, err := poker.OpenPostgresRecords(ctx, databaseURL)
+		cancel()
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer db.Close()
+		pokerRecords = db
+		log.Print("Poker history storage: PostgreSQL ready")
+	} else {
+		log.Print("Poker history storage: memory only (DATABASE_URL not configured)")
+	}
+	pokerService := poker.NewServiceWithRecords(platformStore, pokerRecords)
 	pokerContext, stopPoker := context.WithCancel(context.Background())
 	pokerDone := make(chan struct{})
 	go func() { defer close(pokerDone); pokerService.Run(pokerContext) }()
